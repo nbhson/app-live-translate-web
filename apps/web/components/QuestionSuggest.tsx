@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export type SuggestItem = {
   seq: number;
@@ -11,9 +11,13 @@ export type SuggestItem = {
 
 export function QuestionSuggest({ items, onClear }: { items: SuggestItem[]; onClear?: () => void }) {
   const [mode, setMode] = useState<"both" | "structures" | "full">("both");
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState(items.length - 1);
+  // auto active latest when new question arrives
+  useEffect(() => {
+    setSelected(items.length - 1);
+  }, [items.length]);
   if (items.length === 0) return null;
-  const cur = items[Math.min(selected, items.length - 1)];
+  const cur = items[Math.min(Math.max(0, selected), items.length - 1)];
   const latest = items[items.length - 1];
 
   return (
@@ -39,7 +43,6 @@ export function QuestionSuggest({ items, onClear }: { items: SuggestItem[]; onCl
         <div className="flex gap-1.5 px-4 py-2 overflow-x-auto border-b border-zinc-800/50 shrink-0">
           {items.slice(-6).map((it, idx) => {
             const realIdx = items.length - Math.min(6, items.length) + idx;
-            const active = realIdx === (selected < items.length - 6 ? items.length - 1 : selected);
             return (
               <button
                 key={it.seq}

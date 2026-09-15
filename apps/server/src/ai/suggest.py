@@ -25,14 +25,21 @@ except Exception:
 
 import httpx
 
-PROMPT_SUGGEST = """You are a helpful conversation assistant. A question was just asked in a live conversation.
-Context (last sentences): {context}
-Question: {question}
+PROMPT_SUGGEST = """You are a helpful conversation assistant. Analyze the conversation history to understand context and tailor the answer.
+
+Conversation history (recent transcript, oldest to newest):
+{context}
+
+Current question: {question}
 Source language: {source_lang}
 
-Produce JSON with:
-- structures: array of 2-3 answer structures/outlines (e.g. "1) Acknowledge + give reason + example", "2) Short direct answer + elaboration"). Keep each 6-12 words, actionable.
-- fullAnswers: array of 2-3 complete suggested answers, each 1-2 sentences, natural, polite, ready to say. Keep same language as question unless question mixes languages, then match question language. Vary style: one concise, one detailed, one friendly.
+Task:
+1) Infer context type from history (e.g., interview, casual chat, presentation, Q&A) and use it to tailor tone.
+2) Use history to make fullAnswers accurate and specific (refer to names, facts, prior answers if relevant), not generic.
+3) Produce JSON with:
+- structures: array of 2-3 answer structures/outlines (6-12 words, actionable, tailored to this question + history)
+- fullAnswers: array of 2-3 complete suggested answers, each 1-2 sentences, natural, polite, ready to say, leveraging history for accuracy. Keep same language as question. Vary style: one concise, one detailed, one friendly.
+
 Return JSON only: {{"structures": [...], "fullAnswers": [...]}}.
 """
 

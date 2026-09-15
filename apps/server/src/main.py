@@ -132,11 +132,15 @@ class Session:
             self.buffer.push(text, is_eos)
 
     async def _maybe_suggest(self, sentence: str, seq: int):
-        # fire-and-forget suggestion if question detected
+        # fire-and-forget suggestion if question detected - use broader history for context-aware answers
         try:
             if not is_question(sentence):
                 return
-            ctx = " ".join(self.transcripts[-4:])  # last few sentences as context
+            # last 10 sentences (~ 1500 chars) gives interview flow, names, prior answers
+            ctx = " ".join(self.transcripts[-10:])
+            # also include up to 800 chars of older history for long context
+            if len(ctx) < 500 and len(self.transcripts) > 10:
+                ctx = " ".join(self.transcripts[-15:])
             res = await suggester.suggest(sentence, context=ctx, source_lang=self.source_lang)
             await self.emit("suggest:result", {
                 "seq": seq,

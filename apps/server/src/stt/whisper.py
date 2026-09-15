@@ -50,24 +50,25 @@ class WhisperStream:
         self._last_emit = time.monotonic()
         self._running = False
         # 16k mono int16: 1 sec = 32000 bytes
-        self._chunk_ms = int(os.environ.get("WHISPER_CHUNK_MS", "1800"))
+        self._chunk_ms = int(os.environ.get("WHISPER_CHUNK_MS", "850"))
         self._vad_thresh = float(os.environ.get("WHISPER_VAD_THRESH", "0.015"))
         self._lock = asyncio.Lock()
+        self._last_interim = 0.0
 
     async def connect(self):
         # warm up model in thread
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _get_model)
         self._running = True
-        logger.info(f"[whisper] ready lang={self.language} auto={self.auto_detect} chunk={self._chunk_ms}ms")
+        logger.info(f"[whisper] ready lang={self.language} auto={self.auto_detect} chunk={self._chunk_ms}ms (low-latency)")
         # start periodic flush task
         self._flush_task = asyncio.create_task(self._periodic_flush())
 
     async def _periodic_flush(self):
         while self._running:
-            await asyncio.sleep(self._chunk_ms / 1000)
+            await asyncio.sleep(self._chunk_ms / 1000 * 0.7)
             # if buffer has enough and silence, flush
-            if len(self._buf) > 16000 * 2 * 0.8:  # >0.8s
+            if len(self._buf) > 16000 * 2 * 0.6:  # >0.6s
                 await self._try_transcribe(force=False)
 
     def _is_speech(self, pcm: bytes) -> bool:
@@ -84,13 +85,39 @@ class WhisperStream:
             return
         async with self._lock:
             self._buf.extend(pcm_bytes)
-            # interim heuristic: if loud, emit interim placeholder
-            if len(self._buf) > 24000 and self.on_interim:
-                # don't call whisper for interim (expensive), just hint
-                pass
+            # fast interim via whisper on ~1s window (throttled 400ms) for near-live feel
+            now = time.monotonic()
+            if self.on_interim and len(self._buf) > 16000 and now - self._last_interim > 0.4:
+                self._last_interim = now
+                # copy small window for interim
+                inter_chunk = bytes(self._buf[-32000:])  # last 1s
+                if self._is_speech(inter_chunk):
+                    asyncio.create_task(self._try_interim(inter_chunk))
             # flush if buffer large
-            if len(self._buf) >= 16000 * 2 * (self._chunk_ms / 1000) * 1.2:
+            if len(self._buf) >= 16000 * 2 * (self._chunk_ms / 1000) * 1.0:
                 await self._try_transcribe(force=False)
+
+    async def _try_interim(self, pcm: bytes):
+        if not pcm or not self.on_interim:
+            return
+        def _trans():
+            model = _get_model()
+            audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+            lang = None if self.auto_detect or self.language == "auto" else self.language
+            segments, info = model.transcribe(audio, language=lang, beam_size=1, vad_filter=True, without_timestamps=True)
+            text = " ".join(s.text.strip() for s in segments if s.text.strip())
+            detected = info.language if hasattr(info, "language") else (lang or "en")
+            return text, detected
+        loop = asyncio.get_running_loop()
+        try:
+            text, detected = await loop.run_in_executor(None, _trans)
+        except Exception:
+            return
+        if text and self.on_interim:
+            try:
+                await self.on_interim(text, detected, 0.85)
+            except Exception:
+                pass
 
     async def _try_transcribe(self, force: bool = False):
         if not self._buf:
@@ -102,11 +129,11 @@ class WhisperStream:
             if len(self._buf) > 32000:
                 self._buf = self._buf[-9600:]
             return
-        # take up to 8s window
-        max_bytes = 16000 * 2 * 8
+        # take up to 5s window for low latency (was 8s)
+        max_bytes = 16000 * 2 * 5
         chunk = bytes(self._buf[-max_bytes:]) if len(self._buf) > max_bytes else bytes(self._buf)
-        # keep 0.5s overlap for context, but clear most
-        keep = 16000  # 0.5s
+        # keep 0.4s overlap for context, but clear most
+        keep = 12800  # 0.4s
         self._buf = self._buf[-keep:] if len(self._buf) > keep else bytearray()
 
         # run whisper in thread

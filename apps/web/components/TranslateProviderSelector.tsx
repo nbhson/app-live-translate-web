@@ -8,8 +8,8 @@ type Props = {
 };
 
 const OPTIONS: { value: TranslateProvider; label: string; desc: string }[] = [
-  { value: "ai", label: "AI (Custom)", desc: "Dùng CUSTOM_API_KEY/BASE_URL/MODEL - OpenAI-compatible" },
-  { value: "mymemory", label: "MyMemory (FREE)", desc: "Miễn phí, không cần key, ~5000 ký tự/ngày/IP" },
+  { value: "ai", label: "AI (Custom)", desc: "Uses CUSTOM_API_KEY/BASE_URL/MODEL - OpenAI-compatible" },
+  { value: "mymemory", label: "MyMemory (FREE)", desc: "Free, no key required, ~5000 chars/day/IP" },
 ];
 
 export function TranslateProviderSelector({ value, onChange }: Props) {

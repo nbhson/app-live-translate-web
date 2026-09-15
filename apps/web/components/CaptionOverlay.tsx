@@ -44,7 +44,7 @@ export function CaptionOverlay({ interim, finals, sentences, translations, detec
                   <div className="text-white leading-relaxed">{s}</div>
                   {Object.entries(translations).map(([lang, arr]) => {
                     const t = arr[seq];
-                    if (!t) return <div key={lang} className="text-[0.85em] text-zinc-500 italic">[{lang}] … đang dịch</div>;
+                    if (!t) return <div key={lang} className="text-[0.85em] text-zinc-500 italic">[{lang}] … translating</div>;
                     const color = lang === "vi" ? "text-amber-300" : lang === "en" ? "text-sky-300" : "text-emerald-300";
                     return (
                       <div key={lang} className={`${color} text-[0.9em] leading-relaxed`}>
@@ -78,13 +78,13 @@ export function CaptionOverlay({ interim, finals, sentences, translations, detec
             </div>
           )}
           {!lastFinal && !interim && (
-            <div className="text-zinc-500 text-center py-12 text-base">Bấm Start để bắt đầu live caption</div>
+            <div className="text-zinc-500 text-center py-12 text-base">Press Start to begin live caption</div>
           )}
         </div>
       </div>
       {detectedLang && (
         <div className="px-5 py-2 text-xs text-zinc-500 border-t border-zinc-800 bg-zinc-950">
-          Đang nghe: {detectedLang} {confidence ? `(${Math.round(confidence*100)}%)` : ""}
+          Listening: {detectedLang} {confidence ? `(${Math.round(confidence*100)}%)` : ""}
           {targetLangs && targetLangs.length>1 ? ` → ${targetLangs.join(", ")}` : ""}
         </div>
       )}

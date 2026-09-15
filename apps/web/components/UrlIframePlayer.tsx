@@ -77,7 +77,7 @@ export function UrlIframePlayer() {
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Dán URL video / website (youtube.com, vimeo, mp4, meet...) + Enter"
+              placeholder="Paste video / website URL (youtube.com, vimeo, mp4, meet...) + Enter"
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-9 pr-3 py-2.5 text-sm placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
               onKeyDown={(e) => e.key === "Enter" && handleLoad()}
             />
@@ -106,7 +106,7 @@ export function UrlIframePlayer() {
 
         {!activeUrl && (
           <div className="flex gap-2 flex-wrap items-center">
-            <span className="text-[11px] text-zinc-500">Gợi ý:</span>
+            <span className="text-[11px] text-zinc-500">Suggestions:</span>
             {QUICK_URLS.map((q) => (
               <button key={q.label} onClick={() => { setUrl(q.url); handleLoad(q.url); }} className="text-[11px] px-2.5 py-1 rounded-full border border-zinc-700 hover:bg-zinc-800 text-zinc-300 transition">
                 {q.label}
@@ -114,7 +114,7 @@ export function UrlIframePlayer() {
             ))}
             {history.length > 0 && (
               <>
-                <span className="text-[11px] text-zinc-600 ml-2">Gần đây:</span>
+                <span className="text-[11px] text-zinc-600 ml-2">Recent:</span>
                 {history.slice(0, 4).map((h) => (
                   <button key={h} onClick={() => { setUrl(h); handleLoad(h); }} className="text-[11px] px-2 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 truncate max-w-[160px] text-zinc-400">
                     {(() => { try { return new URL(h).hostname; } catch { return h.slice(0,20);} })()}
@@ -126,8 +126,8 @@ export function UrlIframePlayer() {
         )}
 
         <p className="text-[11px] text-zinc-500 leading-relaxed">
-          Iframe chạy với <code className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-300">allow="microphone; camera; display-capture"</code> — audio trong iframe vẫn là <b className="text-zinc-300">tab audio</b>. Dùng <b className="text-zinc-300">Bắt đầu</b> với nguồn <b className="text-zinc-300">Tab</b> (extension Side Panel hoặc picker Share audio) để caption & dịch.
-          {activeUrl.includes("youtube.com/embed") && <span className="ml-2 text-amber-400">YouTube embed đã bật autoplay.</span>}
+          Iframe runs with <code className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-300">allow="microphone; camera; display-capture"</code> — audio in iframe is still <b className="text-zinc-300">tab audio</b>. Use <b className="text-zinc-300">Start</b> with source <b className="text-zinc-300">Tab</b> (extension Side Panel or Share audio picker) for caption & translate.
+          {activeUrl.includes("youtube.com/embed") && <span className="ml-2 text-amber-400">YouTube embed autoplay enabled.</span>}
         </p>
       </div>
 
@@ -143,14 +143,14 @@ export function UrlIframePlayer() {
           {/* floating badge */}
           <div className="absolute top-3 left-3 flex gap-2">
             <span className="text-[11px] bg-black/70 backdrop-blur border border-white/10 text-white px-2.5 py-1 rounded-full">▶ Iframe active</span>
-            <span className="hidden sm:inline text-[11px] bg-emerald-600/90 text-white px-2.5 py-1 rounded-full">Tab audio → caption đang bắt</span>
+            <span className="hidden sm:inline text-[11px] bg-emerald-600/90 text-white px-2.5 py-1 rounded-full">Tab audio → caption active</span>
           </div>
         </div>
       ) : (
         <div className="flex-1 min-h-[280px] lg:min-h-0 flex flex-col items-center justify-center py-10 px-6 text-center bg-gradient-to-b from-zinc-900 to-zinc-950">
           <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-2xl mb-4">🖥️</div>
-          <h3 className="font-medium text-zinc-200">Chưa có nguồn phát</h3>
-          <p className="text-sm text-zinc-500 mt-1 max-w-[420px]">Dán URL video/meeting/website ở trên để load iframe. Caption và dịch sẽ bám theo audio của iframe (tab audio) — không cần mic.</p>
+          <h3 className="font-medium text-zinc-200">No source yet</h3>
+          <p className="text-sm text-zinc-500 mt-1 max-w-[420px]">Paste a video/meeting/website URL above to load the iframe. Captions and translation will follow the iframe audio (tab audio) — no mic needed.</p>
         </div>
       )}
     </div>

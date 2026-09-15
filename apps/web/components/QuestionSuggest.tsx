@@ -25,16 +25,16 @@ export function QuestionSuggest({ items, onClear }: { items: SuggestItem[]; onCl
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/50 shrink-0">
         <div className="flex items-center gap-2">
           <span className="w-6 h-6 rounded-lg bg-amber-500 text-black flex items-center justify-center text-xs font-bold">?</span>
-          <h3 className="text-sm font-medium">Gợi ý trả lời</h3>
-          <span className="text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full">{items.length} câu hỏi</span>
+          <h3 className="text-sm font-medium">Suggested Answers</h3>
+          <span className="text-[11px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full">{items.length} questions</span>
         </div>
         <div className="flex items-center gap-1">
           <div className="flex bg-zinc-800 rounded-lg p-0.5">
-            <button onClick={() => setMode("both")} className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${mode === "both" ? "bg-white text-black" : "text-zinc-400"}`}>Cả 2</button>
-            <button onClick={() => setMode("structures")} className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${mode === "structures" ? "bg-white text-black" : "text-zinc-400"}`}>Cấu trúc</button>
-            <button onClick={() => setMode("full")} className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${mode === "full" ? "bg-white text-black" : "text-zinc-400"}`}>Câu hoàn chỉnh</button>
+            <button onClick={() => setMode("both")} className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${mode === "both" ? "bg-white text-black" : "text-zinc-400"}`}>Both</button>
+            <button onClick={() => setMode("structures")} className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${mode === "structures" ? "bg-white text-black" : "text-zinc-400"}`}>Structures</button>
+            <button onClick={() => setMode("full")} className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${mode === "full" ? "bg-white text-black" : "text-zinc-400"}`}>Full Answers</button>
           </div>
-          {onClear && <button onClick={onClear} className="ml-2 text-[11px] text-zinc-500 hover:text-zinc-300">Xóa</button>}
+          {onClear && <button onClick={onClear} className="ml-2 text-[11px] text-zinc-500 hover:text-zinc-300">Clear</button>}
         </div>
       </div>
 
@@ -59,14 +59,14 @@ export function QuestionSuggest({ items, onClear }: { items: SuggestItem[]; onCl
 
       <div className="p-4 space-y-3 overflow-auto flex-1 min-h-0">
         <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
-          <div className="text-[11px] text-zinc-500 mb-1">Câu hỏi #{cur.seq + 1}</div>
+          <div className="text-[11px] text-zinc-500 mb-1">Question #{cur.seq + 1}</div>
           <div className="text-sm text-white font-medium leading-relaxed">“{cur.question}”</div>
         </div>
 
         {(mode === "both" || mode === "structures") && (
           <div>
             <div className="text-xs font-medium text-zinc-300 mb-2 flex items-center gap-2">
-              <span className="w-5 h-5 rounded bg-zinc-800 flex items-center justify-center text-[10px]">≡</span> 2–3 cấu trúc gợi ý
+              <span className="w-5 h-5 rounded bg-zinc-800 flex items-center justify-center text-[10px]">≡</span> 2–3 suggested structures
             </div>
             <div className="space-y-2">
               {cur.structures.map((s, i) => (
@@ -83,7 +83,7 @@ export function QuestionSuggest({ items, onClear }: { items: SuggestItem[]; onCl
         {(mode === "both" || mode === "full") && (
           <div>
             <div className="text-xs font-medium text-zinc-300 mb-2 flex items-center gap-2">
-              <span className="w-5 h-5 rounded bg-amber-500 flex items-center justify-center text-[10px] text-black">✦</span> Câu trả lời hoàn chỉnh
+              <span className="w-5 h-5 rounded bg-amber-500 flex items-center justify-center text-[10px] text-black">✦</span> Complete answers
             </div>
             <div className="space-y-2">
               {cur.fullAnswers.map((a, i) => (
@@ -97,7 +97,7 @@ export function QuestionSuggest({ items, onClear }: { items: SuggestItem[]; onCl
         )}
 
         {cur !== latest && (
-          <button onClick={() => setSelected(items.length - 1)} className="text-xs text-amber-400 hover:underline">→ Xem câu hỏi mới nhất</button>
+          <button onClick={() => setSelected(items.length - 1)} className="text-xs text-amber-400 hover:underline">→ View latest question</button>
         )}
       </div>
     </div>

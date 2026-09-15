@@ -9,9 +9,9 @@ type Props = {
 };
 
 const OPTIONS: { value: STTProvider; label: string; desc: string }[] = [
-  { value: "deepgram", label: "Deepgram Nova-3 (Default)", desc: "Cloud streaming, 300ms, WER ~9% - cần API key" },
-  { value: "webspeech", label: "Web Speech API (Browser Live)", desc: "Miễn phí, chỉ Chrome, live ngay trong browser" },
-  { value: "free", label: "Free Forever → Xem chi tiết", desc: "Self-host Whisper/WASM - 0đ/tháng, đi tới trang Free" },
+  { value: "deepgram", label: "Deepgram Nova-3 (Default)", desc: "Cloud streaming, 300ms, WER ~9% - API key required" },
+  { value: "webspeech", label: "Web Speech API (Browser Live)", desc: "Free, Chrome only, live in browser" },
+  { value: "free", label: "Free Forever → View details", desc: "Self-host Whisper/WASM - $0/month, go to Free page" },
 ];
 
 export function STTProviderSelector({ value, onChange }: Props) {
@@ -49,7 +49,7 @@ export function STTProviderSelector({ value, onChange }: Props) {
           <>
             {" "}
             <button onClick={() => router.push("/free")} className="underline text-amber-400">
-              → Đi tới Free
+              → Go to Free
             </button>
           </>
         )}

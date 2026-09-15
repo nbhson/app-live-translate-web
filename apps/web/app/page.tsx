@@ -106,7 +106,7 @@ export default function Home() {
         <div className="flex flex-wrap gap-2 items-center bg-zinc-900 border border-zinc-800 rounded-xl p-3">
           {sttProvider === "webspeech" && (
             <div className="flex gap-2 items-center mr-2">
-              <span className="text-xs text-zinc-400 whitespace-nowrap">Nguồn:</span>
+              <span className="text-xs text-zinc-400 whitespace-nowrap">Source:</span>
               <select value={audioSource} onChange={e=>setAudioSource(e.target.value as any)} className="bg-zinc-800 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs">
                 <option value="tab">🌐 Tab (kể cả iframe)</option>
                 <option value="mic">🎙️ Microphone</option>
@@ -114,11 +114,11 @@ export default function Home() {
             </div>
           )}
           {!live.isCapturing ? (
-            <button onClick={live.startCapture} className="bg-white text-black px-5 py-2 rounded-lg font-semibold hover:bg-zinc-200 transition text-sm">▶ Bắt đầu</button>
+            <button onClick={live.startCapture} className="bg-white text-black px-5 py-2 rounded-lg font-semibold hover:bg-zinc-200 transition text-sm">▶ Start</button>
           ) : (
-            <button onClick={live.stopCapture} className="bg-red-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-red-700 transition text-sm">■ Dừng</button>
+            <button onClick={live.stopCapture} className="bg-red-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-red-700 transition text-sm">■ Stop</button>
           )}
-          <button onClick={live.clear} className="border border-zinc-700 bg-zinc-800 px-4 py-2 rounded-lg text-sm hover:bg-zinc-700 transition">Xóa</button>
+          <button onClick={live.clear} className="border border-zinc-700 bg-zinc-800 px-4 py-2 rounded-lg text-sm hover:bg-zinc-700 transition">Clear</button>
           <button onClick={()=>handleExport("srt")} className="border border-zinc-700 px-4 py-2 rounded-lg text-sm hover:bg-zinc-800 transition hidden sm:inline-flex">.srt</button>
           <button onClick={()=>handleExport("vtt")} className="border border-zinc-700 px-4 py-2 rounded-lg text-sm hover:bg-zinc-800 transition hidden sm:inline-flex">.vtt</button>
 
@@ -128,7 +128,7 @@ export default function Home() {
           </div>
         </div>
         {!live.isConnected && (
-          <p className="text-xs text-amber-400 mt-2">Chưa kết nối server — chạy <code className="bg-zinc-800 px-1 rounded">pnpm dev:server</code> và <code className="bg-zinc-800 px-1 rounded">ws://localhost:8000</code></p>
+          <p className="text-xs text-amber-400 mt-2">Not connected to server — run <code className="bg-zinc-800 px-1 rounded">pnpm dev:server</code> and <code className="bg-zinc-800 px-1 rounded">ws://localhost:8000</code></p>
         )}
         {live.error && <p className="text-xs text-red-400 mt-2">{live.error}</p>}
       </div>
@@ -142,7 +142,7 @@ export default function Home() {
               <UrlIframePlayer />
             </div>
             <div className="text-[11px] text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-lg p-3 shrink-0 hidden lg:block">
-              Mẹo: Dùng extension <b className="text-zinc-300">Side Panel</b> → chọn <b className="text-zinc-300">🌐 Tab + iframe</b> để bắt audio không cần picker. Web thường Tab sẽ fallback sang PCM Deepgram tự động.
+              Tip: Use the <b className="text-zinc-300">Side Panel</b> extension → select <b className="text-zinc-300">🌐 Tab + iframe</b> to capture audio without a picker. Regular web Tab will fallback to PCM Deepgram automatically.
             </div>
           </div>
 
@@ -167,7 +167,7 @@ export default function Home() {
                 onClick={() => setActiveTab("history")}
                 className={`px-3 lg:px-4 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition flex items-center gap-1.5 ${activeTab === "history" ? "bg-white text-black shadow" : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"}`}
               >
-                Lịch sử
+                History
                 {seqs.length > 0 && <span className="text-[10px] bg-zinc-700 text-zinc-200 px-1.5 py-0.5 rounded-full">{seqs.length}</span>}
               </button>
             </div>
@@ -209,15 +209,15 @@ export default function Home() {
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button onClick={()=>live.requestSummary("30s")} className="text-xs border border-zinc-700 bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-800 transition">30s</button>
-                    <button onClick={()=>live.requestSummary("full")} className="text-xs bg-white text-black px-3 py-2 rounded-lg hover:bg-zinc-200 transition font-medium">Tóm tắt toàn bộ</button>
+                    <button onClick={()=>live.requestSummary("full")} className="text-xs bg-white text-black px-3 py-2 rounded-lg hover:bg-zinc-200 transition font-medium">Summarize All</button>
                   </div>
                 </div>
               ) : (
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col h-full min-h-0">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
-                    <h2 className="text-sm font-medium">Lịch sử</h2>
+                    <h2 className="text-sm font-medium">History</h2>
                     <div className="flex gap-2 lg:gap-3 items-center">
-                      <span className="text-xs text-zinc-500 hidden sm:inline">{seqs.length ? `${seqs.length} câu • seq-mapped` : `${live.finals.length} segments`}</span>
+                      <span className="text-xs text-zinc-500 hidden sm:inline">{seqs.length ? `${seqs.length} sentences • seq-mapped` : `${live.finals.length} segments`}</span>
                       <label className="text-xs text-zinc-400 flex items-center gap-1.5">
                         <input type="checkbox" defaultChecked id="autoscroll" className="accent-white" /> Auto-scroll
                       </label>
@@ -228,7 +228,7 @@ export default function Home() {
                     className="flex-1 min-h-0 overflow-auto text-sm divide-y divide-zinc-800 scroll-smooth"
                   >
                     {seqs.length === 0 && live.finals.length === 0 ? (
-                      <p className="text-zinc-500 p-8 text-center">Chưa có transcript — bấm Bắt đầu và phát audio trong iframe</p>
+                      <p className="text-zinc-500 p-8 text-center">No transcript yet — press Start and play audio in iframe</p>
                     ) : seqs.length > 0 ? (
                       seqs.map((seq) => (
                         <div key={seq} className="px-4 py-3 hover:bg-zinc-800/50 transition">
@@ -240,7 +240,7 @@ export default function Home() {
                                 const t = live.translations[tl]?.[seq];
                                 return (
                                   <div key={tl} className={`text-[13px] leading-relaxed break-words ${tl === "vi" ? "text-amber-300" : "text-sky-300"}`}>
-                                    {t ? t : <span className="text-zinc-500 italic">… đang dịch</span>}
+                                    {t ? t : <span className="text-zinc-500 italic">… translating</span>}
                                   </div>
                                 );
                               })}

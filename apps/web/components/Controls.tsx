@@ -47,7 +47,7 @@ export function Controls({
         <label className="text-xs text-zinc-400">Font <input type="range" min={14} max={26} value={fontSize} onChange={e=>onFontChange(Number(e.target.value))} className="w-20 align-middle" /> {fontSize}px</label>
         <label className="text-xs text-zinc-400">Opacity <input type="range" min={0.4} max={1} step={0.05} value={opacity} onChange={e=>onOpacityChange(Number(e.target.value))} className="w-20 align-middle" /> {Math.round(opacity*100)}%</label>
       </div>
-      <span className="text-[11px] text-zinc-500 w-full">Yêu cầu quyền Share Tab Audio (Pure Web) hoặc cài Extension/Tauri để bắt system audio</span>
+      <span className="text-[11px] text-zinc-500 w-full">Requires Share Tab Audio permission (Pure Web) or install Extension/Tauri to capture system audio</span>
     </div>
   );
 }

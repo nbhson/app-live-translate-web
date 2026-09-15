@@ -27,13 +27,13 @@ export function SummaryPanel({
             disabled={isLoading}
             className="text-xs bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded hover:bg-zinc-700 disabled:opacity-50"
           >
-            {isLoading ? "Đang tóm tắt..." : "Tóm tắt"}
+            {isLoading ? "Summarizing..." : "Summarize"}
           </button>
           {summary && onCopy && <button onClick={onCopy} className="text-xs border border-zinc-700 px-2 py-1 rounded">Copy</button>}
         </div>
       </div>
       <div className="text-sm whitespace-pre-wrap leading-relaxed flex-1 overflow-auto p-4 scroll-smooth">
-        {summary ? <div className="text-zinc-200">{summary}</div> : <div className="text-zinc-500">Chưa có tóm tắt. Bấm Tóm tắt sau khi có transcript (buffer 30s-5p, streaming).</div>}
+        {summary ? <div className="text-zinc-200">{summary}</div> : <div className="text-zinc-500">No summary yet. Press Summarize after transcript is available (buffer 30s-5m, streaming).</div>}
         {chapters && chapters.length>0 && (
           <div className="mt-3">
             <div className="text-xs text-zinc-400 mb-1">Chapters</div>

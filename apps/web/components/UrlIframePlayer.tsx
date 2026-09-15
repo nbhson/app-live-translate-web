@@ -68,9 +68,9 @@ export function UrlIframePlayer() {
   };
 
   return (
-    <div ref={wrapRef} className={`flex flex-col bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden ${isFullscreen ? "bg-black" : ""}`}>
+    <div ref={wrapRef} className={`flex flex-col bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden min-h-0 h-full ${isFullscreen ? "bg-black" : ""}`}>
       {/* toolbar */}
-      <div className="flex flex-col gap-3 p-3 bg-zinc-900 border-b border-zinc-800">
+      <div className="flex flex-col gap-3 p-3 bg-zinc-900 border-b border-zinc-800 shrink-0">
         <div className="flex gap-2">
           <div className="flex-1 relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">🌐</span>
@@ -133,10 +133,10 @@ export function UrlIframePlayer() {
 
       {/* iframe area */}
       {activeUrl ? (
-        <div className="relative bg-black">
+        <div className="relative bg-black flex-1 min-h-[280px] lg:min-h-0">
           <iframe
             src={activeUrl}
-            className="w-full h-[58vh] lg:h-[62vh] min-h-[340px]"
+            className="w-full h-full absolute inset-0"
             allow="autoplay; encrypted-media; fullscreen; microphone; camera; display-capture; clipboard-read; clipboard-write; geolocation; picture-in-picture"
             allowFullScreen
           />
@@ -147,7 +147,7 @@ export function UrlIframePlayer() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-16 px-6 text-center bg-gradient-to-b from-zinc-900 to-zinc-950">
+        <div className="flex-1 min-h-[280px] lg:min-h-0 flex flex-col items-center justify-center py-10 px-6 text-center bg-gradient-to-b from-zinc-900 to-zinc-950">
           <div className="w-16 h-16 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-2xl mb-4">🖥️</div>
           <h3 className="font-medium text-zinc-200">Chưa có nguồn phát</h3>
           <p className="text-sm text-zinc-500 mt-1 max-w-[420px]">Dán URL video/meeting/website ở trên để load iframe. Caption và dịch sẽ bám theo audio của iframe (tab audio) — không cần mic.</p>

@@ -154,7 +154,7 @@ class SentenceBuffer {
 }
 ```
 
-**Provider:**
+**Provider & seq-mapped гарантия:**
 
 - FREE: `MyMemory` (`api.mymemory.translated.net`) - không cần key, ~5000 ký tự/ngày/IP, cache `Map`+`Redis`, fallback `LibreTranslate`. Đủ cho demo/test.
 - AI chất lượng cao: `Custom OpenAI-compatible` (`CUSTOM_API_KEY/BASE_URL/MODEL` - Ollama, OpenRouter, Groq, Together, vLLM...) - prompt:
@@ -162,6 +162,7 @@ class SentenceBuffer {
   You are a live caption translator. Translate from ${sourceLang} to ${targetLang}, keep context, short and natural, no explanation.
   ```
   Hỗ trợ streaming (`TRANSLATE_STREAM=1`), giữ ngữ cảnh tốt hơn cho ngôn ngữ hiếm.
+- **Seq mapping (fix AI chậm lệch câu):** Server gán `seq` monotonic cho mỗi sentence từ `SentenceBuffer` (`Session._sentence_seq`), emit `translate:final {seq, source, text}` và `stt:final {seq}` cho Web Speech. Client `useLiveCaption` lưu `sentences[seq]=source` và `translations[lang][seq]=text` (sparse array), `CaptionOverlay` & history render theo `seq` nên dù AI trả chậm/out-of-order vẫn khớp đúng câu EN gốc.
 
 **Phase 2 - Đa ngôn ngữ:**
 

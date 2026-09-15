@@ -6,9 +6,9 @@ import { saveTranscript } from "../lib/db";
 
 type ServerEvent =
   | { type: "stt:interim"; transcript: string; language: string; confidence: number }
-  | { type: "stt:final"; transcript: string; language: string; words: { word: string; start: number; end: number }[]; is_eos: boolean }
-  | { type: "translate:final"; source: string; sourceLang: string; targetLang: string; text: string; provider: string }
-  | { type: "translate:stream"; targetLang: string; token: string }
+  | { type: "stt:final"; transcript: string; language: string; words: { word: string; start: number; end: number }[]; is_eos: boolean; seq?: number }
+  | { type: "translate:final"; source: string; sourceLang: string; targetLang: string; text: string; provider: string; seq?: number }
+  | { type: "translate:stream"; targetLang: string; token: string; seq?: number; source?: string }
   | { type: "summary:chunk"; token: string }
   | { type: "summary:final"; summary: string; chapters: { title: string; start_ms: number }[]; actionItems: string[]; keywords?: string[] }
   | { type: "error"; code?: string; message: string };
@@ -19,6 +19,7 @@ import type { TranslateProvider } from "../components/TranslateProviderSelector"
 export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]; sttProvider?: STTProvider; translateProvider?: TranslateProvider; audioSource?: "mic" | "tab" }) {
   const [interim, setInterim] = useState("");
   const [finals, setFinals] = useState<{ text: string; language: string; ts: number }[]>([]);
+  const [sentences, setSentences] = useState<string[]>([]); // seq -> source sentence (for correct mapping even when AI slow/out-of-order)
   const [translations, setTranslations] = useState<Record<string, string[]>>({});
   const [detectedLang, setDetectedLang] = useState<string>();
   const [confidence, setConfidence] = useState<number>();
@@ -58,22 +59,59 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
         break;
       }
       case "translate:final": {
-        setTranslations((prev) => ({
-          ...prev,
-          [ev.targetLang]: [...(prev[ev.targetLang] ?? []), ev.text]
-        }));
+        const seq = typeof ev.seq === "number" ? ev.seq : undefined;
+        if (seq !== undefined) {
+          // seq-based exact mapping: even if AI responds out-of-order, place at correct index
+          setSentences((prev) => {
+            const next = [...prev];
+            while (next.length <= seq) next.push("");
+            next[seq] = ev.source;
+            return next;
+          });
+          setTranslations((prev) => {
+            const arr = [...(prev[ev.targetLang] ?? [])];
+            while (arr.length <= seq) arr.push("");
+            arr[seq] = ev.text;
+            return { ...prev, [ev.targetLang]: arr };
+          });
+        } else {
+          // fallback legacy (no seq) - append
+          setSentences((prev) => [...prev, ev.source]);
+          setTranslations((prev) => ({
+            ...prev,
+            [ev.targetLang]: [...(prev[ev.targetLang] ?? []), ev.text]
+          }));
+        }
         break;
       }
       case "translate:stream": {
-        // LLM streaming token: append
-        setTranslations((prev) => {
-          const arr = prev[ev.targetLang] ?? [];
-          const last = arr[arr.length-1] ?? "";
-          const next = [...arr.slice(0,-1), last + ev.token];
-          // if empty, start new
-          if (arr.length===0) return { ...prev, [ev.targetLang]: [ev.token] };
-          return { ...prev, [ev.targetLang]: next };
-        });
+        const seq = typeof ev.seq === "number" ? ev.seq : undefined;
+        if (seq !== undefined) {
+          // streaming token for specific seq - ensure sentence placeholder exists
+          if (ev.source) {
+            setSentences((prev) => {
+              const next = [...prev];
+              while (next.length <= seq) next.push("");
+              if (!next[seq]) next[seq] = ev.source as string;
+              return next;
+            });
+          }
+          setTranslations((prev) => {
+            const arr = [...(prev[ev.targetLang] ?? [])];
+            while (arr.length <= seq) arr.push("");
+            arr[seq] = (arr[seq] ?? "") + ev.token;
+            return { ...prev, [ev.targetLang]: arr };
+          });
+        } else {
+          // legacy append to last
+          setTranslations((prev) => {
+            const arr = prev[ev.targetLang] ?? [];
+            const last = arr[arr.length-1] ?? "";
+            const next = [...arr.slice(0,-1), last + ev.token];
+            if (arr.length===0) return { ...prev, [ev.targetLang]: [ev.token] };
+            return { ...prev, [ev.targetLang]: next };
+          });
+        }
         break;
       }
       case "summary:chunk":
@@ -218,6 +256,7 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
   const clear = useCallback(() => {
     setInterim("");
     setFinals([]);
+    setSentences([]);
     setTranslations({});
     setSummary(null);
     setChapters([]); setActionItems([]); setKeywords([]);
@@ -234,6 +273,7 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
   return {
     interim,
     finals,
+    sentences,
     translations,
     detectedLang,
     confidence,

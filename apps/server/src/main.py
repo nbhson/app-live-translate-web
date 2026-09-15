@@ -70,6 +70,7 @@ class Session:
         self.translator = get_translator(self.translate_provider)
         self.transcripts: list[str] = []  # for AI summary
         self._emit_task: asyncio.Task | None = None
+        self._sentence_seq: int = 0  # monotonic sentence id to map translation correctly even when AI is slow
 
     async def emit(self, event: str, payload: dict):
         # broadcast tới cả room để extension + web cùng thấy
@@ -113,9 +114,11 @@ class Session:
             self.buffer.push(text, is_eos)
 
     async def _on_sentence(self, sentence: str):
+        seq = self._sentence_seq
+        self._sentence_seq += 1
         # fan-out multi-target via gather per ARCHITECTURE.md
         async def _one(tl: str):
-            # if LLM streaming, emit stream tokens
+            # if LLM streaming, emit stream tokens with seq so client maps correctly
             if (
                 hasattr(self.translator, "translate_stream")
                 and os.environ.get("TRANSLATE_STREAM", "") == "1"
@@ -123,11 +126,12 @@ class Session:
                 text = ""
                 async for tok in self.translator.translate_stream(sentence, self.source_lang, tl):
                     text += tok
-                    await self.emit("translate:stream", {"targetLang": tl, "token": tok})
+                    await self.emit("translate:stream", {"targetLang": tl, "token": tok, "seq": seq, "source": sentence})
                 if text:
                     await self.emit(
                         "translate:final",
                         {
+                            "seq": seq,
                             "source": sentence,
                             "sourceLang": self.source_lang,
                             "targetLang": tl,
@@ -140,6 +144,7 @@ class Session:
                 await self.emit(
                     "translate:final",
                     {
+                        "seq": seq,
                         "source": sentence,
                         "sourceLang": self.source_lang,
                         "targetLang": tl,
@@ -296,18 +301,21 @@ async def websocket_endpoint(ws: WebSocket):
                     )
                 elif t == "translate:request":
                     # Client-side STT (Web Speech API) gửi text lên để server dịch - dùng cho provider=webspeech
+                    # Mỗi câu được gán seq để client mapping đúng dù AI trả chậm / out-of-order
                     text = msg.get("text", "").strip()
                     s_lang = msg.get("sourceLang", session.source_lang)
                     t_langs = msg.get("targetLangs", session.target_langs)
                     if text:
+                        seq = session._sentence_seq
+                        session._sentence_seq += 1
                         # cũng lưu vào buffer/transcript để history + summary dùng được
                         session.transcripts.append(text)
-                        await session.emit("stt:final", {"transcript": text, "language": s_lang, "words": [], "is_eos": True})
-                        # fan-out dịch qua SentenceBuffer hoặc trực tiếp
+                        await session.emit("stt:final", {"transcript": text, "language": s_lang, "words": [], "is_eos": True, "seq": seq})
+                        # fan-out dịch - mỗi targetLang chung seq
                         for tl in t_langs:
                             try:
                                 translated = await session.translator.translate(text, s_lang, tl)
-                                await session.emit("translate:final", {"source": text, "sourceLang": s_lang, "targetLang": tl, "text": translated, "provider": session.translator.__class__.__name__.lower()})
+                                await session.emit("translate:final", {"seq": seq, "source": text, "sourceLang": s_lang, "targetLang": tl, "text": translated, "provider": session.translator.__class__.__name__.lower()})
                             except Exception as e:
                                 await session.emit("error", {"code": "TRANSLATE_ERROR", "message": str(e)})
                 elif t == "summary:request":

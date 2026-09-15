@@ -69,10 +69,13 @@ pnpm dev:web          # http://localhost:3000
 - `CUSTOM_API_KEY` + `CUSTOM_BASE_URL` + `CUSTOM_MODEL` (cho AI translate/summary - OpenAI-compatible; nếu để trống sẽ tự fallback `MyMemory FREE`)
 - `TRANSLATE_PROVIDER=auto|ai|free` (auto = ưu tiên CUSTOM nếu có, không thì MyMemory)
 
-**Cách dùng:**
-- **Mic (FREE):** Web `STT=Web Speech API + Nguồn=Mic` -> `Start` nói vào mic.
-- **Tab/iframe (FREE):** Cài `apps/extension` Side Panel (`chrome://extensions` -> `Load unpacked`) -> Side Panel chọn `🌐 Âm thanh Tab (kể cả iframe)` -> `Bắt đầu` -> bắt mọi audio tab hiện tại (kể cả `UrlIframePlayer` trong web). Web `http://localhost:3000` có ô `Nhập URL` -> `Load iframe` (Youtube/embed) với `allow="microphone; camera; display-capture"` full quyền, audio iframe cũng là tab audio nên bắt được.
-- **Tab pure web (không extension):** Web `STT=Deepgram` hoặc `Web Speech + Tab` -> `Start` -> picker `This Tab` + tick `Share audio` -> PCM gửi server `Deepgram` (nếu chọn Tab trong web mà Web Speech không `start(track)` được sẽ tự fallback sang PCM Deepgram).
+**Cách dùng (iframe-first, pro):**
+- **Iframe là trung tâm:** Mở `http://localhost:3000` → ô `🌐` dán URL (youtube.com, vimeo, mp4, meet...) → `Load` → iframe lớn 58-62vh chiếm 65% màn hình, toolbar có `⛶ Fullscreen`, `↗ New tab`, history & gợi ý. Iframe có `allow="microphone; camera; display-capture; autoplay; fullscreen; clipboard-*"`.
+- **Mic (FREE):** `STT=Web Speech API + Nguồn=Mic` → `Bắt đầu` nói vào mic.
+- **Tab/iframe (FREE, khuyên dùng):** Cài `apps/extension` Side Panel (`chrome://extensions` → `Load unpacked`) → Side Panel chọn `🌐 Âm thanh Tab (kể cả iframe)` → `Bắt đầu` → bắt mọi audio tab hiện tại (kể cả `UrlIframePlayer`). Không cần picker.
+- **Tab pure web (không extension):** `STT=Deepgram` hoặc `Web Speech + Tab` → `Bắt đầu` → picker `This Tab` + tick `Share audio` → PCM gửi server `Deepgram` (web `start(track)` không hỗ trợ sẽ tự fallback PCM).
+
+> **Fix mapping:** Mọi câu được gán `seq` trên server (`Session._sentence_seq`), client lưu `sentences[seq]` + `translations[lang][seq]` nên dù AI chậm/out-of-order, bản dịch vẫn khớp đúng câu EN gốc. Lịch sử hiển thị `#{seq}` + `… đang dịch` cho câu chưa về.
 
 Lưu ý: Pure Web capture dùng `getDisplayMedia` - khi bấm Start, chọn tab và tick **"Share audio"**.
 

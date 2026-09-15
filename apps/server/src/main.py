@@ -10,6 +10,23 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
+
+# load .env if present (so CUSTOM_* from apps/server/.env is available without manual export)
+try:
+    _env_path = Path(__file__).resolve().parents[1] / ".env"
+    if _env_path.exists():
+        for line in _env_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            if k and k not in os.environ:
+                os.environ[k] = v
+except Exception:
+    pass
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware

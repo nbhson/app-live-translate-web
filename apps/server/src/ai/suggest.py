@@ -5,6 +5,23 @@ Chỉ dùng CUSTOM_* khi có, fallback template khi không.
 
 import os
 import re
+from pathlib import Path
+
+# ensure .env loaded even when imported standalone
+try:
+    _env_path = Path(__file__).resolve().parents[2] / ".env"
+    if _env_path.exists():
+        for line in _env_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            if k and k not in os.environ:
+                os.environ[k] = v
+except Exception:
+    pass
 
 import httpx
 
@@ -48,10 +65,18 @@ class Suggester:
         self.base_url = os.environ.get("CUSTOM_BASE_URL", "").rstrip("/")
         self.model = os.environ.get("CUSTOM_MODEL", "gpt-4o-mini")
 
+    def _refresh(self):
+        # re-read env in case it was loaded from .env after import
+        self.api_key = os.environ.get("CUSTOM_API_KEY", "") or self.api_key
+        self.base_url = os.environ.get("CUSTOM_BASE_URL", "").rstrip("/") or self.base_url
+        self.model = os.environ.get("CUSTOM_MODEL", "gpt-4o-mini") or self.model
+
     async def suggest(self, question: str, context: str = "", source_lang: str = "en") -> dict:
+        self._refresh()
         if not question.strip():
             return {"structures": [], "fullAnswers": []}
         if not self.api_key or not self.base_url:
+            print(f"[suggest] no CUSTOM key/base, fallback for: {question[:40]}")
             return self._fallback(question)
         return await self._custom(question, context, source_lang)
 

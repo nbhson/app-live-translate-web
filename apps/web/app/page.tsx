@@ -17,6 +17,7 @@ export default function Home() {
   const [audioSource, setAudioSource] = useState<"mic" | "tab">("tab");
   const [fontSize, setFontSize] = useState(18);
   const [opacity, setOpacity] = useState(0.95);
+  const [activeTab, setActiveTab] = useState<"live" | "summary">("live");
   const live = useLiveCaption({ sourceLang, targetLangs, sttProvider, translateProvider, audioSource });
   const historyRef = useRef<HTMLDivElement>(null);
 
@@ -131,94 +132,140 @@ export default function Home() {
         {live.error && <p className="text-xs text-red-400 mt-2">{live.error}</p>}
       </div>
 
-      {/* Main iframe-first layout */}
-      <div className="max-w-[1600px] mx-auto w-full flex-1 grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-4 p-4 lg:p-6">
-        {/* Left: Iframe dominant */}
-        <div className="flex flex-col gap-4 min-h-[520px]">
-          <UrlIframePlayer />
-          <div className="text-[11px] text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-lg p-3">
-            Mẹo: Dùng extension <b className="text-zinc-300">Side Panel</b> → chọn <b className="text-zinc-300">🌐 Tab + iframe</b> để bắt audio không cần picker. Web thường Tab sẽ fallback sang PCM Deepgram tự động.
-          </div>
-        </div>
-
-        {/* Right: Caption + Summary */}
-        <div className="flex flex-col gap-4">
-          <CaptionOverlay
-            interim={live.interim}
-            finals={live.finals}
-            sentences={live.sentences}
-            translations={live.translations}
-            detectedLang={live.detectedLang}
-            confidence={live.confidence}
-            fontSize={fontSize}
-            opacity={opacity}
-            targetLangs={targetLangs}
-          />
-          <SummaryPanel
-            summary={live.summary}
-            chapters={live.chapters}
-            actionItems={live.actionItems}
-            keywords={live.keywords}
-            onRequestSummary={()=>live.requestSummary("full")}
-            isLoading={live.summaryLoading}
-            onCopy={()=> live.summary && navigator.clipboard.writeText(live.summary)}
-          />
-          <button onClick={()=>live.requestSummary("30s")} className="text-xs border border-zinc-700 bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-800 transition">Realtime Summary (30s)</button>
+      {/* Tabs */}
+      <div className="max-w-[1600px] mx-auto w-full px-4 lg:px-6 mt-4">
+        <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit">
+          <button
+            onClick={() => setActiveTab("live")}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition ${activeTab === "live" ? "bg-white text-black shadow" : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"}`}
+          >
+            🔴 Live Translate
+          </button>
+          <button
+            onClick={() => setActiveTab("summary")}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${activeTab === "summary" ? "bg-white text-black shadow" : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"}`}
+          >
+            📝 Summary
+            {live.summary && <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />}
+          </button>
         </div>
       </div>
 
-      {/* History - seq-mapped */}
-      <section className="max-w-[1600px] mx-auto w-full px-4 lg:px-6 pb-6">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-            <h2 className="text-sm font-medium">Lịch sử</h2>
-            <div className="flex gap-3 items-center">
-              <span className="text-xs text-zinc-500">{seqs.length ? `${seqs.length} câu • seq-mapped` : `${live.finals.length} segments`}</span>
-              <label className="text-xs text-zinc-400 flex items-center gap-1.5">
-                <input type="checkbox" defaultChecked id="autoscroll" className="accent-white" /> Auto-scroll
-              </label>
+      {activeTab === "live" ? (
+        <>
+          {/* Main iframe-first layout - hard fixed, no drag/drop */}
+          <div className="max-w-[1600px] mx-auto w-full flex-1 grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-4 p-4 lg:p-6">
+            {/* Left: Iframe dominant */}
+            <div className="flex flex-col gap-4 min-h-[520px]">
+              <UrlIframePlayer />
+              <div className="text-[11px] text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+                Mẹo: Dùng extension <b className="text-zinc-300">Side Panel</b> → chọn <b className="text-zinc-300">🌐 Tab + iframe</b> để bắt audio không cần picker. Web thường Tab sẽ fallback sang PCM Deepgram tự động.
+              </div>
+            </div>
+
+            {/* Right: Caption fixed */}
+            <div className="flex flex-col gap-4">
+              <CaptionOverlay
+                interim={live.interim}
+                finals={live.finals}
+                sentences={live.sentences}
+                translations={live.translations}
+                detectedLang={live.detectedLang}
+                confidence={live.confidence}
+                fontSize={fontSize}
+                opacity={opacity}
+                targetLangs={targetLangs}
+              />
+              <div className="text-[11px] text-zinc-500 text-center">Caption cố định trên tab Live — chuyển sang tab Summary để xem tóm tắt</div>
             </div>
           </div>
-          <div
-            ref={historyRef}
-            className="max-h-[320px] overflow-auto text-sm divide-y divide-zinc-800 scroll-smooth"
-          >
-            {seqs.length === 0 && live.finals.length === 0 ? (
-              <p className="text-zinc-500 p-8 text-center">Chưa có transcript — bấm Bắt đầu và phát audio trong iframe</p>
-            ) : seqs.length > 0 ? (
-              seqs.map((seq) => (
-                <div key={seq} className="px-4 py-3 hover:bg-zinc-800/50 transition">
-                  <div className="flex gap-2">
-                    <span className="text-[11px] text-zinc-500 font-mono mt-0.5">#{seq + 1}</span>
-                    <div className="flex-1 space-y-1">
-                      <div className="text-zinc-100 leading-relaxed">{live.sentences[seq]}</div>
-                      {targetLangs.map((tl) => {
-                        const t = live.translations[tl]?.[seq];
-                        return (
-                          <div key={tl} className={`text-[13px] leading-relaxed ${tl === "vi" ? "text-amber-300" : "text-sky-300"}`}>
-                            {t ? t : <span className="text-zinc-500 italic">… đang dịch</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+
+          {/* History - seq-mapped */}
+          <section className="max-w-[1600px] mx-auto w-full px-4 lg:px-6 pb-6">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+                <h2 className="text-sm font-medium">Lịch sử</h2>
+                <div className="flex gap-3 items-center">
+                  <span className="text-xs text-zinc-500">{seqs.length ? `${seqs.length} câu • seq-mapped` : `${live.finals.length} segments`}</span>
+                  <label className="text-xs text-zinc-400 flex items-center gap-1.5">
+                    <input type="checkbox" defaultChecked id="autoscroll" className="accent-white" /> Auto-scroll
+                  </label>
                 </div>
-              ))
-            ) : (
-              live.finals.map((f, i) => (
-                <div key={i} className="px-4 py-3 hover:bg-zinc-800/50 transition">
-                  <div className="text-zinc-200">{f.text} <span className="text-xs text-zinc-500">[{f.language}]</span></div>
-                  {targetLangs.map((tl) => (
-                    <div key={tl} className="text-amber-300 text-[13px]">
-                      {live.translations[tl]?.[i] ?? <span className="text-zinc-500 italic">…</span>}
+              </div>
+              <div
+                ref={historyRef}
+                className="max-h-[320px] overflow-auto text-sm divide-y divide-zinc-800 scroll-smooth"
+              >
+                {seqs.length === 0 && live.finals.length === 0 ? (
+                  <p className="text-zinc-500 p-8 text-center">Chưa có transcript — bấm Bắt đầu và phát audio trong iframe</p>
+                ) : seqs.length > 0 ? (
+                  seqs.map((seq) => (
+                    <div key={seq} className="px-4 py-3 hover:bg-zinc-800/50 transition">
+                      <div className="flex gap-2">
+                        <span className="text-[11px] text-zinc-500 font-mono mt-0.5">#{seq + 1}</span>
+                        <div className="flex-1 space-y-1">
+                          <div className="text-zinc-100 leading-relaxed">{live.sentences[seq]}</div>
+                          {targetLangs.map((tl) => {
+                            const t = live.translations[tl]?.[seq];
+                            return (
+                              <div key={tl} className={`text-[13px] leading-relaxed ${tl === "vi" ? "text-amber-300" : "text-sky-300"}`}>
+                                {t ? t : <span className="text-zinc-500 italic">… đang dịch</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              ))
-            )}
+                  ))
+                ) : (
+                  live.finals.map((f, i) => (
+                    <div key={i} className="px-4 py-3 hover:bg-zinc-800/50 transition">
+                      <div className="text-zinc-200">{f.text} <span className="text-xs text-zinc-500">[{f.language}]</span></div>
+                      {targetLangs.map((tl) => (
+                        <div key={tl} className="text-amber-300 text-[13px]">
+                          {live.translations[tl]?.[i] ?? <span className="text-zinc-500 italic">…</span>}
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : (
+        <div className="max-w-[1600px] mx-auto w-full flex-1 p-4 lg:p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
+              <SummaryPanel
+                summary={live.summary}
+                chapters={live.chapters}
+                actionItems={live.actionItems}
+                keywords={live.keywords}
+                onRequestSummary={()=>live.requestSummary("full")}
+                isLoading={live.summaryLoading}
+                onCopy={()=> live.summary && navigator.clipboard.writeText(live.summary)}
+              />
+              <div className="mt-3 flex gap-2">
+                <button onClick={()=>live.requestSummary("30s")} className="text-xs border border-zinc-700 bg-zinc-900 px-4 py-2 rounded-lg hover:bg-zinc-800 transition">Tóm tắt 30s gần nhất</button>
+                <button onClick={()=>live.requestSummary("full")} className="text-xs bg-white text-black px-4 py-2 rounded-lg hover:bg-zinc-200 transition font-medium">Tóm tắt toàn bộ</button>
+              </div>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <h3 className="text-sm font-medium mb-2">Thông tin</h3>
+              <div className="text-xs text-zinc-400 space-y-1">
+                <div>Transcript: {live.sentences.filter(Boolean).length || live.finals.length} câu</div>
+                <div>Đã tóm tắt: {live.summary ? "có" : "chưa"}</div>
+                <div>Chapters: {live.chapters.length}</div>
+                <div>Action items: {live.actionItems.length}</div>
+              </div>
+              <div className="mt-4 text-[11px] text-zinc-500">
+                Summary dùng <b className="text-zinc-300">CUSTOM_*</b> nếu có, fallback extractive (TF + keywords) đã fix để không chỉ lặp lại transcript. Prompt mới yêu cầu bullet distilled, không verbatim.
+              </div>
+            </div>
           </div>
         </div>
-      </section>
+      )}
     </main>
   );
 }

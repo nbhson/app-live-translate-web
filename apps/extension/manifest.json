@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Live Translate - Tab Audio Capture",
+  "version": "0.1.0",
+  "description": "Capture audio of any tab, stream to Live Translate server",
+  "permissions": ["tabCapture", "activeTab", "offscreen", "storage"],
+  "background": {
+    "service_worker": "background.ts"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "ws://localhost:8000/*",
+    "wss://*/*"
+  ],
+  "offscreen_documents": [
+    {
+      "url": "offscreen.html",
+      "justification": "Hold tab audio stream and AudioWorklet for PCM 16k",
+      "reasons": ["USER_MEDIA"]
+    }
+  ]
+}

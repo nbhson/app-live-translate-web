@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: live
+      POSTGRES_PASSWORD: live
+      POSTGRES_DB: live_translate
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U live"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes: [redisdata:/data]
+
+  server:
+    build: ../apps/server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://live:live@postgres:5432/live_translate
+      REDIS_URL: redis://redis:6379
+      STT_PROVIDER: ${STT_PROVIDER:-deepgram}
+      TRANSLATE_PROVIDER: ${TRANSLATE_PROVIDER:-google}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:?Set in .env}
+      GOOGLE_TRANSLATE_KEY: ${GOOGLE_TRANSLATE_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-auto}
+      SUMMARY_MODEL: ${SUMMARY_MODEL:-}
+      CUSTOM_API_KEY: ${CUSTOM_API_KEY:-}
+      CUSTOM_BASE_URL: ${CUSTOM_BASE_URL:-}
+      CUSTOM_MODEL: ${CUSTOM_MODEL:-}
+    ports: ["8000:8000"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

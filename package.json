@@ -1,0 +1,26 @@
+{
+  "name": "live-translate",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint && pnpm lint:py",
+    "lint:js": "eslint packages/shared/src apps/web/lib --ext .ts,.tsx",
+    "lint:py": "ruff check apps/server/src && ruff format --check apps/server/src",
+    "test": "turbo run test",
+    "test:coverage": "turbo run test:coverage && apps/server/.venv/bin/python -m pytest apps/server/tests --cov=src --cov-report=term --cov-fail-under=90",
+    "dev:web": "pnpm --filter web dev",
+    "dev:server": "pnpm --filter server dev",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.70.0"
+  }
+}

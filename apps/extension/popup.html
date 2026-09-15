@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><style>body{width:260px;padding:12px;font-family:sans-serif}button{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:1px solid #333;background:#111;color:#fff;cursor:pointer}select{width:100%;padding:6px;margin-top:4px}label{font-size:12px;color:#888}</style></head>
+<body>
+<h3 style="margin:0 0 8px">Live Translate</h3>
+<label>Caption <select id="src"><option value="auto">Auto</option><option value="en" selected>EN</option><option value="vi">VI</option><option value="ja">JA</option><option value="ko">KO</option><option value="zh">ZH</option></select></label>
+<label>Dịch sang <select id="tgt"><option value="vi" selected>VI</option><option value="en">EN</option><option value="ja">JA</option></select></label>
+<button id="start">▶ Start Tab Capture</button>
+<button id="stop">■ Stop</button>
+<div id="status" style="font-size:12px;color:#888;margin-top:8px"></div>
+<script type="module">
+const $ = id=>document.getElementById(id);
+$("start").onclick = async ()=>{
+  const src=$("src").value, tgt=$("tgt").value;
+  await chrome.storage.local.set({ sourceLang:src, targetLangs:[tgt] });
+  chrome.runtime.sendMessage({ cmd:"start", sourceLang:src, targetLangs:[tgt] }, (res)=>{
+    $("status").textContent = res?.ok ? "Đang capture..." : "Lỗi: "+(res?.error||"unknown");
+  });
+};
+$("stop").onclick = ()=> chrome.runtime.sendMessage({ cmd:"stop" }, ()=> $("status").textContent="Đã dừng");
+chrome.storage.local.get(["sourceLang","targetLangs"], v=>{
+  if(v.sourceLang) $("src").value=v.sourceLang;
+  if(v.targetLangs?.[0]) $("tgt").value=v.targetLangs[0];
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+.env
+.env.local
+*.log
+__pycache__
+.venv
+*.pyc
+.DS_Store
+apps/web/.next
+apps/server/__pycache__

@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+<head><title>Offscreen</title></head>
+<body>
+<script type="module">
+// Offscreen document - giữ MediaStream, chạy AudioWorklet, gửi PCM tới WS
+// MV3 bắt buộc offscreen vì Service Worker không có Web Audio.
+
+let ws = null;
+let ctx = null;
+let stream = null;
+let workletNode = null;
+
+const workletCode = `
+class PCMWorklet extends AudioWorkletProcessor {
+  constructor(){ super(); this.buf=[]; this.chunk=12000; }
+  process(inputs){
+    const inp = inputs[0][0];
+    if(inp){
+      const c = new Float32Array(inp.length); c.set(inp);
+      this.buf.push(c);
+      let total = this.buf.reduce((s,a)=>s+a.length,0);
+      if(total>=this.chunk){
+        const merged=new Float32Array(total);
+        let off=0; for(const a of this.buf){ merged.set(a,off); off+=a.length; }
+        this.port.postMessage(merged.slice(0,this.chunk));
+        const rem=merged.slice(this.chunk);
+        this.buf = rem.length?[rem]:[];
+      }
+    }
+    return true;
+  }
+}
+registerProcessor("pcm-worklet", PCMWorklet);
+`;
+let blobUrl = null;
+
+async function start({ sourceLang, targetLangs, wsUrl }) {
+  stop();
+  // get tab audio via getUserMedia with chromeMediaSource:tab (offscreen can use tabCapture stream id if passed)
+  // Fallback: use navigator.mediaDevices.getDisplayMedia for dev, or chrome.tabCapture in offscreen
+  try {
+    // Try tabCapture via offscreen (Chrome 116+ supports getMediaStreamId)
+    // For simplicity, ask for displayMedia - user still needs to pick tab once; extension flow will be improved to use streamId.
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: "tab" } } as any });
+  } catch {
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video:true, audio:true } as any);
+    } catch (e) {
+      console.error("offscreen: no stream", e);
+      return;
+    }
+  }
+  const tracks = stream.getAudioTracks();
+  if (!tracks.length) { console.error("no audio tracks"); return; }
+
+  ws = new WebSocket(wsUrl || "ws://localhost:8000/ws");
+  ws.binaryType="arraybuffer";
+  ws.onopen = ()=> ws.send(JSON.stringify({ type:"join", sourceLang: sourceLang||"en", targetLangs: targetLangs||["vi"] }));
+
+  ctx = new AudioContext({ sampleRate: 48000 });
+  if (!blobUrl) {
+    const blob = new Blob([workletCode], { type:"application/javascript" });
+    blobUrl = URL.createObjectURL(blob);
+  }
+  await ctx.audioWorklet.addModule(blobUrl);
+  const source = ctx.createMediaStreamSource(new MediaStream(tracks));
+  workletNode = new AudioWorkletNode(ctx, "pcm-worklet");
+  let silentMs=0;
+  const VAD_T=0.015;
+  workletNode.port.onmessage = (e)=>{
+    const input=e.data;
+    let sum=0; for(let i=0;i<input.length;i++) sum+=input[i]*input[i];
+    const rms=Math.sqrt(sum/input.length);
+    if(rms < VAD_T){ silentMs += input.length/48000*1000; if(silentMs>300) return; } else silentMs=0;
+    const outLen=Math.floor(input.length/3);
+    const pcm16=new Int16Array(outLen);
+    for(let i=0;i<outLen;i++){ const s=Math.max(-1,Math.min(1,input[i*3])); pcm16[i]= s<0? s*0x8000 : s*0x7fff; }
+    if(ws && ws.readyState===WebSocket.OPEN) ws.send(pcm16.buffer);
+  };
+  const gain=ctx.createGain(); gain.gain.value=0;
+  source.connect(workletNode).connect(gain).connect(ctx.destination);
+  tracks[0].onended = ()=> stop();
+}
+
+function stop(){
+  if(workletNode){ try{workletNode.disconnect();}catch{} workletNode=null; }
+  if(ctx){ ctx.close().catch(()=>{}); ctx=null; }
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  if(ws){ try{ws.close();}catch{} ws=null; }
+}
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse)=>{
+  if(msg?.cmd==="offscreen:start"){ start(msg).then(()=>sendResponse({ok:true})); return true; }
+  if(msg?.cmd==="offscreen:stop"){ stop(); sendResponse({ok:true}); }
+  if(msg?.cmd==="offscreen:updateSettings" && ws && ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({ type:"settings:update", sourceLang: msg.sourceLang, targetLangs: msg.targetLangs }));
+  }
+});
+chrome.runtime.sendMessage({ cmd:"offscreen:ready" });
+</script>
+</body>
+</html>

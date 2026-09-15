@@ -189,7 +189,7 @@ export default function Home() {
                     />
                   </div>
                   {live.suggestions.length > 0 && (
-                    <div className="shrink-0 h-[260px] lg:h-[240px] min-h-0 overflow-hidden min-w-0">
+                    <div className="shrink-0 h-[380px] lg:h-[360px] min-h-0 overflow-hidden min-w-0">
                       <QuestionSuggest items={live.suggestions} onClear={live.clearSuggestions} />
                     </div>
                   )}

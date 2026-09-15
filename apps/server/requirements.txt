@@ -15,6 +15,10 @@ pydantic>=2.0.0
 pydantic-settings>=2.0.0
 structlog>=24.0.0
 certifi>=2024.0.0
+# stt self-host free forever (close to Deepgram WER 9% -> 10%)
+faster-whisper>=1.1.0
+ctranslate2>=4.4.0
+numpy>=1.24.0
 # dev
 pytest>=8.0.0
 pytest-asyncio>=0.24.0

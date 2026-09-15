@@ -34,6 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.ai.suggest import suggester, is_question
 from src.ai.summarizer import summarizer
 from src.stt.deepgram import DeepgramStream
+from src.stt.whisper import WhisperStream
 from src.translate.buffer import SentenceBuffer
 from src.translate.free import MyMemoryTranslator
 from src.translate.google import GoogleTranslator
@@ -76,6 +77,17 @@ def get_translator(provider: str | None = None):
     return MyMemoryTranslator()
 
 
+def create_stt(language: str, auto_detect: bool):
+    """Factory xịn như Deepgram nhưng free forever khi STT_PROVIDER=whisper."""
+    provider = os.environ.get("STT_PROVIDER", "deepgram").lower()
+    has_key = bool(os.environ.get("DEEPGRAM_API_KEY", "").strip())
+    # auto fallback to whisper if no key or explicitly whisper
+    if provider in ("whisper", "faster-whisper", "self") or (provider == "deepgram" and not has_key):
+        logger.info(f"[stt] using Whisper self-host (provider={provider}, has_key={has_key})")
+        return WhisperStream(language=language, auto_detect=auto_detect)
+    return DeepgramStream(api_key=os.environ.get("DEEPGRAM_API_KEY", ""), language=language, auto_detect=auto_detect)
+
+
 class Session:
     def __init__(self, source_lang: str, target_langs: list[str], ws: WebSocket, translate_provider: str | None = None, room_id: str = "default"):
         self.source_lang = source_lang
@@ -95,11 +107,7 @@ class Session:
         await _broadcast(self.room_id, event, payload)
 
     async def start(self):
-        self.stt = DeepgramStream(
-            api_key=os.environ.get("DEEPGRAM_API_KEY", ""),
-            language=self.source_lang,
-            auto_detect=self.source_lang == "auto",
-        )
+        self.stt = create_stt(self.source_lang, self.source_lang == "auto")
 
         # use create_task safe wrappers
         async def _interim(text, lang, conf):
@@ -304,11 +312,7 @@ async def websocket_endpoint(ws: WebSocket):
                         if session.stt:
                             try:
                                 await session.stt.close()
-                                session.stt = DeepgramStream(
-                                    api_key=os.environ.get("DEEPGRAM_API_KEY", ""),
-                                    language=session.source_lang,
-                                    auto_detect=session.source_lang == "auto",
-                                )
+                                session.stt = create_stt(session.source_lang, session.source_lang == "auto")
 
                                 async def _i(text, lang, conf):
                                     await session._emit_interim(text, lang, conf)

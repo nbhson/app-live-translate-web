@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { CaptionOverlay } from "../components/CaptionOverlay";
 import { LanguageSelector } from "../components/LanguageSelector";
+import { QuestionSuggest } from "../components/QuestionSuggest";
 import { STTProviderSelector, type STTProvider } from "../components/STTProviderSelector";
 import { TranslateProviderSelector, type TranslateProvider } from "../components/TranslateProviderSelector";
 import { SummaryPanel } from "../components/SummaryPanel";
@@ -150,9 +151,10 @@ export default function Home() {
             <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit shrink-0">
               <button
                 onClick={() => setActiveTab("live")}
-                className={`px-3 lg:px-4 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition ${activeTab === "live" ? "bg-white text-black shadow" : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"}`}
+                className={`px-3 lg:px-4 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition flex items-center gap-1.5 ${activeTab === "live" ? "bg-white text-black shadow" : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"}`}
               >
                 Live
+                {live.suggestions.length > 0 && <span className="text-[10px] bg-amber-500 text-black px-1.5 py-0.5 rounded-full">{live.suggestions.length}</span>}
               </button>
               <button
                 onClick={() => setActiveTab("summary")}
@@ -172,17 +174,26 @@ export default function Home() {
 
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               {activeTab === "live" ? (
-                <CaptionOverlay
-                  interim={live.interim}
-                  finals={live.finals}
-                  sentences={live.sentences}
-                  translations={live.translations}
-                  detectedLang={live.detectedLang}
-                  confidence={live.confidence}
-                  fontSize={fontSize}
-                  opacity={opacity}
-                  targetLangs={targetLangs}
-                />
+                <div className="h-full flex flex-col gap-3 min-h-0 overflow-hidden">
+                  <div className="flex-1 min-h-0">
+                    <CaptionOverlay
+                      interim={live.interim}
+                      finals={live.finals}
+                      sentences={live.sentences}
+                      translations={live.translations}
+                      detectedLang={live.detectedLang}
+                      confidence={live.confidence}
+                      fontSize={fontSize}
+                      opacity={opacity}
+                      targetLangs={targetLangs}
+                    />
+                  </div>
+                  {live.suggestions.length > 0 && (
+                    <div className="shrink-0 max-h-[42%] min-h-[180px] overflow-hidden">
+                      <QuestionSuggest items={live.suggestions} onClear={live.clearSuggestions} />
+                    </div>
+                  )}
+                </div>
               ) : activeTab === "summary" ? (
                 <div className="h-full flex flex-col gap-3 min-h-0">
                   <div className="flex-1 min-h-0 overflow-hidden">

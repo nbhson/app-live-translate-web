@@ -14,6 +14,7 @@ import time
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.ai.suggest import suggester, is_question
 from src.ai.summarizer import summarizer
 from src.stt.deepgram import DeepgramStream
 from src.translate.buffer import SentenceBuffer
@@ -113,9 +114,28 @@ class Session:
         if self.buffer:
             self.buffer.push(text, is_eos)
 
+    async def _maybe_suggest(self, sentence: str, seq: int):
+        # fire-and-forget suggestion if question detected
+        try:
+            if not is_question(sentence):
+                return
+            ctx = " ".join(self.transcripts[-4:])  # last few sentences as context
+            res = await suggester.suggest(sentence, context=ctx, source_lang=self.source_lang)
+            await self.emit("suggest:result", {
+                "seq": seq,
+                "question": sentence,
+                "structures": res.get("structures", [])[:3],
+                "fullAnswers": res.get("fullAnswers", [])[:3],
+                "sourceLang": self.source_lang,
+            })
+        except Exception as e:
+            print(f"[suggest] error: {e}")
+
     async def _on_sentence(self, sentence: str):
         seq = self._sentence_seq
         self._sentence_seq += 1
+        # question suggestion (async, not blocking translate)
+        asyncio.create_task(self._maybe_suggest(sentence, seq))
         # fan-out multi-target via gather per ARCHITECTURE.md
         async def _one(tl: str):
             # if LLM streaming, emit stream tokens with seq so client maps correctly
@@ -311,6 +331,9 @@ async def websocket_endpoint(ws: WebSocket):
                         # cũng lưu vào buffer/transcript để history + summary dùng được
                         session.transcripts.append(text)
                         await session.emit("stt:final", {"transcript": text, "language": s_lang, "words": [], "is_eos": True, "seq": seq})
+                        # question suggest for webspeech path
+                        if is_question(text):
+                            asyncio.create_task(session._maybe_suggest(text, seq))
                         # fan-out dịch - mỗi targetLang chung seq
                         for tl in t_langs:
                             try:

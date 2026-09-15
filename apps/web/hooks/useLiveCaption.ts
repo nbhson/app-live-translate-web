@@ -11,6 +11,7 @@ type ServerEvent =
   | { type: "translate:stream"; targetLang: string; token: string; seq?: number; source?: string }
   | { type: "summary:chunk"; token: string }
   | { type: "summary:final"; summary: string; chapters: { title: string; start_ms: number }[]; actionItems: string[]; keywords?: string[] }
+  | { type: "suggest:result"; seq: number; question: string; structures: string[]; fullAnswers: string[]; sourceLang?: string }
   | { type: "error"; code?: string; message: string };
 
 import type { STTProvider } from "../components/STTProviderSelector";
@@ -31,6 +32,7 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
   const [actionItems, setActionItems] = useState<string[]>([]);
   const [keywords, setKeywords] = useState<string[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ seq: number; question: string; structures: string[]; fullAnswers: string[]; sourceLang?: string }[]>([]);
 
   const socketRef = useRef<ReturnType<typeof createLiveSocket> | null>(null);
   const finalsRef = useRef(finals);
@@ -124,6 +126,14 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
         setKeywords(ev.keywords ?? []);
         setSummaryLoading(false);
         break;
+      case "suggest:result": {
+        setSuggestions((prev) => {
+          // deduplicate by seq
+          if (prev.some((p) => p.seq === ev.seq)) return prev;
+          return [...prev, { seq: ev.seq, question: ev.question, structures: ev.structures ?? [], fullAnswers: ev.fullAnswers ?? [], sourceLang: ev.sourceLang }];
+        });
+        break;
+      }
       case "error":
         setError(ev.message);
         if (ev.code) setSummaryLoading(false);
@@ -147,6 +157,7 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
     sock.on("translate:stream", (d)=> handleServerEvent(d as any));
     sock.on("summary:chunk", (d)=> handleServerEvent(d as any));
     sock.on("summary:final", (d)=> handleServerEvent(d as any));
+    sock.on("suggest:result", (d)=> handleServerEvent(d as any));
     sock.on("error", (d)=> handleServerEvent(d as any));
 
     return () => {
@@ -260,6 +271,7 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
     setTranslations({});
     setSummary(null);
     setChapters([]); setActionItems([]); setKeywords([]);
+    setSuggestions([]);
   }, []);
 
   const requestSummary = useCallback((mode: "30s"|"full" = "full") => {
@@ -285,6 +297,8 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
     actionItems,
     keywords,
     summaryLoading,
+    suggestions,
+    clearSuggestions: useCallback(() => setSuggestions([]), []),
     startCapture,
     stopCapture,
     clear,

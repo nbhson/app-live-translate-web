@@ -143,8 +143,8 @@ export default function Home() {
         </div>
 
         {/* Right: Tabbed panel - same layout as before, tabs on top of SummaryPanel's layout */}
-        <div className="flex flex-col gap-4">
-          <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit">
+        <div className="flex flex-col gap-4 lg:h-[560px]">
+          <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit shrink-0">
             <button
               onClick={() => setActiveTab("live")}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${activeTab === "live" ? "bg-white text-black shadow" : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"}`}
@@ -160,35 +160,39 @@ export default function Home() {
             </button>
           </div>
 
-          {activeTab === "live" ? (
-            <CaptionOverlay
-              interim={live.interim}
-              finals={live.finals}
-              sentences={live.sentences}
-              translations={live.translations}
-              detectedLang={live.detectedLang}
-              confidence={live.confidence}
-              fontSize={fontSize}
-              opacity={opacity}
-              targetLangs={targetLangs}
-            />
-          ) : (
-            <>
-              <SummaryPanel
-                summary={live.summary}
-                chapters={live.chapters}
-                actionItems={live.actionItems}
-                keywords={live.keywords}
-                onRequestSummary={()=>live.requestSummary("full")}
-                isLoading={live.summaryLoading}
-                onCopy={()=> live.summary && navigator.clipboard.writeText(live.summary)}
+          <div className="flex-1 min-h-0">
+            {activeTab === "live" ? (
+              <CaptionOverlay
+                interim={live.interim}
+                finals={live.finals}
+                sentences={live.sentences}
+                translations={live.translations}
+                detectedLang={live.detectedLang}
+                confidence={live.confidence}
+                fontSize={fontSize}
+                opacity={opacity}
+                targetLangs={targetLangs}
               />
-              <div className="flex gap-2">
-                <button onClick={()=>live.requestSummary("30s")} className="text-xs border border-zinc-700 bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-800 transition">30s</button>
-                <button onClick={()=>live.requestSummary("full")} className="text-xs bg-white text-black px-3 py-2 rounded-lg hover:bg-zinc-200 transition font-medium">Tóm tắt toàn bộ</button>
+            ) : (
+              <div className="h-full flex flex-col gap-3">
+                <div className="flex-1 min-h-0">
+                  <SummaryPanel
+                    summary={live.summary}
+                    chapters={live.chapters}
+                    actionItems={live.actionItems}
+                    keywords={live.keywords}
+                    onRequestSummary={()=>live.requestSummary("full")}
+                    isLoading={live.summaryLoading}
+                    onCopy={()=> live.summary && navigator.clipboard.writeText(live.summary)}
+                  />
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={()=>live.requestSummary("30s")} className="text-xs border border-zinc-700 bg-zinc-900 px-3 py-2 rounded-lg hover:bg-zinc-800 transition">30s</button>
+                  <button onClick={()=>live.requestSummary("full")} className="text-xs bg-white text-black px-3 py-2 rounded-lg hover:bg-zinc-200 transition font-medium">Tóm tắt toàn bộ</button>
+                </div>
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

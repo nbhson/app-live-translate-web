@@ -18,8 +18,8 @@ export function SummaryPanel({
   onCopy?: () => void;
 }) {
   return (
-    <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-zinc-900 rounded-xl border border-zinc-800 h-full flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between p-4 pb-3 border-b border-zinc-800 shrink-0">
         <h3 className="font-medium">AI Summary (Phase 3)</h3>
         <div className="flex gap-2">
           <button
@@ -32,7 +32,7 @@ export function SummaryPanel({
           {summary && onCopy && <button onClick={onCopy} className="text-xs border border-zinc-700 px-2 py-1 rounded">Copy</button>}
         </div>
       </div>
-      <div className="text-sm whitespace-pre-wrap leading-relaxed flex-1 overflow-auto">
+      <div className="text-sm whitespace-pre-wrap leading-relaxed flex-1 overflow-auto p-4 scroll-smooth">
         {summary ? <div className="text-zinc-200">{summary}</div> : <div className="text-zinc-500">Chưa có tóm tắt. Bấm Tóm tắt sau khi có transcript (buffer 30s-5p, streaming).</div>}
         {chapters && chapters.length>0 && (
           <div className="mt-3">

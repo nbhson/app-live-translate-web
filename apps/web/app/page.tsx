@@ -133,12 +133,12 @@ export default function Home() {
         {live.error && <p className="text-xs text-red-400 mt-2">{live.error}</p>}
       </div>
 
-      {/* Main iframe-first layout - viewport constrained, responsive */}
+      {/* Main iframe-first layout - viewport constrained, responsive, fixed width 1.7fr/1fr */}
       <div className="max-w-[1600px] mx-auto w-full flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-4 p-4 lg:p-6 overflow-y-auto lg:overflow-hidden">
-          {/* Left: Iframe dominant - responsive height */}
-          <div className="flex flex-col gap-3 min-h-[340px] lg:min-h-0 lg:h-full">
-            <div className="flex-1 min-h-[320px] lg:min-h-0">
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-4 p-4 lg:p-6 overflow-y-auto lg:overflow-hidden lg:items-stretch">
+          {/* Left: Iframe dominant - fixed width 1.7fr, height viewport-constrained */}
+          <div className="flex flex-col gap-3 min-h-[340px] lg:min-h-0 lg:h-full min-w-0 overflow-hidden">
+            <div className="flex-1 min-h-[320px] lg:min-h-0 min-w-0 overflow-hidden">
               <UrlIframePlayer />
             </div>
             <div className="text-[11px] text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-lg p-3 shrink-0 hidden lg:block">
@@ -146,8 +146,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right: Tabbed panel - 3 tabs equal height with video */}
-          <div className="flex flex-col gap-3 min-h-[380px] lg:min-h-0 lg:h-full">
+          {/* Right: Tabbed panel - fixed width 1fr, same height as video, never wider/taller */}
+          <div className="flex flex-col gap-3 min-h-[380px] lg:min-h-0 lg:h-full lg:max-h-full min-w-0 overflow-hidden">
             <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit shrink-0">
               <button
                 onClick={() => setActiveTab("live")}
@@ -172,10 +172,10 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden min-w-0">
               {activeTab === "live" ? (
-                <div className="h-full flex flex-col gap-3 min-h-0 overflow-hidden">
-                  <div className="flex-1 min-h-0">
+                <div className="h-full flex flex-col gap-3 min-h-0 overflow-hidden min-w-0">
+                  <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
                     <CaptionOverlay
                       interim={live.interim}
                       finals={live.finals}
@@ -189,7 +189,7 @@ export default function Home() {
                     />
                   </div>
                   {live.suggestions.length > 0 && (
-                    <div className="shrink-0 max-h-[42%] min-h-[180px] overflow-hidden">
+                    <div className="shrink-0 h-[260px] lg:h-[240px] min-h-0 overflow-hidden min-w-0">
                       <QuestionSuggest items={live.suggestions} onClear={live.clearSuggestions} />
                     </div>
                   )}

@@ -11,7 +11,7 @@
         |
         v
 [Capture Layer] -> [Pre-processing: VAD + Resample 16kHz] -> [STT Streaming] -> [Translation Buffer] -> [WebSocket] -> [Frontend Overlay]
-   Web / Extension / Tauri (Rust cpal)      Silero VAD              Deepgram / Azure / faster-whisper   Google / DeepL / LLM (Gemini/GPT)
+    Web / Extension / Tauri (Rust cpal)      Silero VAD              Deepgram / faster-whisper           Custom AI (OpenAI-compat) / MyMemory FREE
 ```
 
 Chi tiết xem [ARCHITECTURE.md](./ARCHITECTURE.md)
@@ -31,16 +31,17 @@ Chi tiết xem [ROADMAP.md](./ROADMAP.md)
 
 - **Frontend:** Next.js 15 + TypeScript + Tailwind + Zustand + Socket.io-client
 - **Backend:** FastAPI (Python) - hợp với faster-whisper, hoặc NestJS
-- **STT:** Deepgram Nova-3 / Azure Speech (streaming, interim result) | Self-host: faster-whisper large-v3-turbo
-- **Translate:** Google Translation / DeepL (200ms) hoặc LLM Streaming (Gemini 2.0 Flash / GPT-4o-mini) cho tự nhiên
+- **STT:** Deepgram Nova-3 (streaming, interim) | Self-host: faster-whisper large-v3-turbo | Web Speech API (FREE browser)
+- **Translate:** Custom AI `CUSTOM_API_KEY/BASE_URL/MODEL` (OpenAI-compatible: Ollama/OpenRouter/Groq...) hoặc `MyMemory FREE` (0đ, ~200ms)
+- **AI Summary:** Custom AI cùng `CUSTOM_*` (không cần GEMINI/OPENAI riêng)
 - **Infra:** Docker + Fly.io/Railway (GPU) + Vercel (Frontend) + Redis (queue nếu scale)
 - **Monorepo:** pnpm + Turborepo
 
 ```
-apps/web        # Next.js - UI caption overlay
-apps/extension  # Chrome Extension - tabCapture
-apps/desktop    # Tauri (Rust) - system loopback (CoreAudio/WASAPI)
-apps/server     # FastAPI - WebSocket + STT/Translate proxy
+apps/web        # Next.js - UI caption overlay + UrlIframePlayer (full allow)
+apps/extension  # Chrome Extension Side Panel - tabCapture + Web Speech FREE (kể cả iframe)
+apps/desktop    # Tauri (Rust) - system loopback (CoreAudio/WASAPI) - optional
+apps/server     # FastAPI - WebSocket + STT/Translate proxy (room broadcast)
 packages/shared # types, utils, sentence-buffer
 ```
 
@@ -54,7 +55,7 @@ pnpm install
 cd apps/server
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # rồi điền DEEPGRAM_API_KEY
+cp .env.example .env   # rồi điền DEEPGRAM_API_KEY + CUSTOM_*
 python -m src.main
 # Server chạy ở ws://localhost:8000/ws
 
@@ -64,8 +65,14 @@ pnpm dev:web          # http://localhost:3000
 
 **Cần:**
 - Python 3.11+, Node 20+
-- `DEEPGRAM_API_KEY` (bắt buộc cho STT - lấy free trial tại deepgram.com)
-- `GOOGLE_TRANSLATE_KEY` (tuỳ chọn - nếu thiếu, dịch fallback trả về `[vi] text gốc`)
+- `DEEPGRAM_API_KEY` (bắt buộc nếu `STT_PROVIDER=deepgram` - lấy free trial tại deepgram.com; có thể dùng `webspeech` 0đ để không cần key)
+- `CUSTOM_API_KEY` + `CUSTOM_BASE_URL` + `CUSTOM_MODEL` (cho AI translate/summary - OpenAI-compatible; nếu để trống sẽ tự fallback `MyMemory FREE`)
+- `TRANSLATE_PROVIDER=auto|ai|free` (auto = ưu tiên CUSTOM nếu có, không thì MyMemory)
+
+**Cách dùng:**
+- **Mic (FREE):** Web `STT=Web Speech API + Nguồn=Mic` -> `Start` nói vào mic.
+- **Tab/iframe (FREE):** Cài `apps/extension` Side Panel (`chrome://extensions` -> `Load unpacked`) -> Side Panel chọn `🌐 Âm thanh Tab (kể cả iframe)` -> `Bắt đầu` -> bắt mọi audio tab hiện tại (kể cả `UrlIframePlayer` trong web). Web `http://localhost:3000` có ô `Nhập URL` -> `Load iframe` (Youtube/embed) với `allow="microphone; camera; display-capture"` full quyền, audio iframe cũng là tab audio nên bắt được.
+- **Tab pure web (không extension):** Web `STT=Deepgram` hoặc `Web Speech + Tab` -> `Start` -> picker `This Tab` + tick `Share audio` -> PCM gửi server `Deepgram` (nếu chọn Tab trong web mà Web Speech không `start(track)` được sẽ tự fallback sang PCM Deepgram).
 
 Lưu ý: Pure Web capture dùng `getDisplayMedia` - khi bấm Start, chọn tab và tick **"Share audio"**.
 
@@ -79,7 +86,7 @@ Lưu ý: Pure Web capture dùng `getDisplayMedia` - khi bấm Start, chọn tab 
 
 - Không lưu audio mặc định, chỉ lưu transcript khi user bật
 - Log cost theo phút STT để alert chi phí
-- Model versioning cho STT/Translate để A/B test
-- Fallback provider (Deepgram -> Azure) khi provider chính down
+- Model versioning cho STT/Translate (`CUSTOM_MODEL` / `deepgram nova-3`) để A/B test
+- Fallback provider (Deepgram -> faster-whisper self-host; AI Custom -> MyMemory FREE) khi provider chính down
 
 Feedback: https://github.com/anomalyco/opencode

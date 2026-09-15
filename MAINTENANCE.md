@@ -33,9 +33,9 @@ STT là chi phí lớn nhất. Quy tắc:
 
 ## 3. Quản lý Model & Provider
 
-- **Versioning:** Lưu `stt_model: "nova-3@2026-09-01"` và `translate_model: "google-v3"` vào DB `transcripts` table. Khi đổi model, có thể so sánh chất lượng.
-- **A/B Test:** Cho 10% user dùng LLM translate, 90% dùng Google, đo satisfaction (thumbs up).
-- **Update:** Deepgram/Azure update model không báo trước. Cần job cron weekly test với 3 video mẫu, đo WER, alert nếu WER tăng > 2%.
+- **Versioning:** Lưu `stt_model: "nova-3@2026-09-01"` và `translate_model: "custom:${CUSTOM_MODEL}"` hoặc `"mymemory"` vào DB `transcripts` table. Khi đổi model, có thể so sánh chất lượng.
+- **A/B Test:** Cho 10% user dùng Custom AI translate, 90% dùng MyMemory FREE, đo satisfaction (thumbs up).
+- **Update:** Deepgram/Custom provider update model không báo trước. Cần job cron weekly test với 3 video mẫu, đo WER/BLEU, alert nếu WER tăng > 2%.
 - **Backup provider:** Luôn giữ 2 API key cho mỗi provider, rotate khi key hết hạn.
 
 ## 4. Privacy & Bảo mật

@@ -64,7 +64,7 @@ sequenceDiagram
     WS-->>UI: transcript.interim
     STT-->>WS: final transcript "Hello, how are you?"
     WS->>Trans: sentence buffer check (đủ dấu câu?)
-    Trans->>Trans: Google/LLM translate
+    Trans->>Trans: Custom AI / MyMemory translate
     Trans-->>WS: "Xin chào, bạn khỏe không?"
     WS-->>UI: translation.final
 ```
@@ -75,8 +75,9 @@ sequenceDiagram
 
 | Adapter | API | Format gửi đi | Ghi chú |
 |---------|-----|---------------|---------|
-| Web | `navigator.mediaDevices.getDisplayMedia({audio:true, video:true})` | WebM/PCM | Phải kèm video track (hack), chỉ bắt tab được share |
-| Extension | `chrome.tabCapture.capture({audio:true})` + `chrome.desktopCapture` | PCM 48kHz | Cần `permissions: tabCapture, desktopCapture` trong manifest v3 |
+| Web | `navigator.mediaDevices.getDisplayMedia({audio:true, video:true})` + `UrlIframePlayer` | WebM/PCM | Iframe `allow="microphone; camera; display-capture"` full quyền, audio iframe cũng là tab audio |
+| Web Speech FREE | `webkitSpeechRecognition` + `getDisplayMedia`/`tabCapture` track | Text (on-device) | `audioSource=mic` (mic) hoặc `tab` (kể cả iframe) - web thường `start(track)` không hỗ trợ nên fallback PCM Deepgram, Side Panel extension thì `start(track)` được |
+| Extension Side Panel | `chrome.tabCapture.getMediaStreamId({targetTabId})` -> `getUserMedia({chromeMediaSource:'tab', chromeMediaSourceId})` | PCM 16k (Deepgram) hoặc Text (Web Speech track) | `sidepanel.js` bắt tab hiện tại (kể cả iframe), loopback `AudioContext.destination` để vẫn nghe, broadcast `room=default` về web UI |
 | Tauri | Rust `cpal` + `coreaudio` (macOS) / `wasapi` (Windows) loopback | PCM 48kHz stereo | Bắt được toàn bộ system audio, cần xin quyền Screen Recording trên macOS |
 
 Tất cả đều chuyển về `AudioWorklet` để trích PCM và gửi qua WebSocket `binaryType: arraybuffer`.
@@ -127,7 +128,7 @@ type STTResult = {
 }
 ```
 
-Server là proxy: nhận PCM + `sourceLang` từ client -> forward tới Deepgram/Azure -> normalize -> broadcast tới client.
+Server là proxy + room broadcast: nhận PCM + `sourceLang` từ client -> forward tới Deepgram/Custom -> normalize -> `_broadcast(roomId)` tới mọi client trong `default` room (extension + web cùng thấy) `apps/server/src/main.py:13`.
 
 ### 4.4 Translation Service (`apps/server/src/translate/`)
 
@@ -155,12 +156,12 @@ class SentenceBuffer {
 
 **Provider:**
 
-- Nhanh/Rẻ: `Google Cloud Translation v3` - 200ms, $20/1M ký tự, hỗ trợ 100+ cặp.
-- Tự nhiên: `LLM Streaming` với prompt:
+- FREE: `MyMemory` (`api.mymemory.translated.net`) - không cần key, ~5000 ký tự/ngày/IP, cache `Map`+`Redis`, fallback `LibreTranslate`. Đủ cho demo/test.
+- AI chất lượng cao: `Custom OpenAI-compatible` (`CUSTOM_API_KEY/BASE_URL/MODEL` - Ollama, OpenRouter, Groq, Together, vLLM...) - prompt:
   ```
   You are a live caption translator. Translate from ${sourceLang} to ${targetLang}, keep context, short and natural, no explanation.
   ```
-  Dùng `Gemini 2.0 Flash` (1M token $0.07) hoặc `GPT-4o-mini`. Có thể stream token về UI. LLM tốt hơn cho ngôn ngữ hiếm và giữ ngữ cảnh.
+  Hỗ trợ streaming (`TRANSLATE_STREAM=1`), giữ ngữ cảnh tốt hơn cho ngôn ngữ hiếm.
 
 **Phase 2 - Đa ngôn ngữ:**
 
@@ -184,8 +185,8 @@ Cache: `Map<enSentence, viSentence>` + `Redis` nếu scale.
 ### 4.5.1 AI Service (Phase 3) `apps/server/src/ai/`
 
 - Chạy song song với Translation, không chặn luồng live. Buffer transcript theo window 30s-5 phút.
-- Gọi LLM (`Gemini Flash` / `GPT-4o-mini`) để sinh `summary`, `actionItems`, `keywords`, `chapters`.
-- Stream về UI qua `ws event: summary.chunk`, lưu vào table `summaries`.
+- Gọi `Custom LLM` (`CUSTOM_API_KEY/BASE_URL/MODEL` - OpenAI-compatible) để sinh `summary`, `actionItems`, `keywords`, `chapters`.
+- Stream về UI qua `ws event: summary.chunk`, lưu vào table `summaries`. Nếu thiếu `CUSTOM_*` sẽ fallback heuristic.
 
 ### 4.6 Persistence
 
@@ -202,7 +203,7 @@ Cache: `Map<enSentence, viSentence>` + `Redis` nếu scale.
   - Backend: `Fly.io` (có GPU `a10` rẻ) hoặc `Railway`/`Render`. Cần `WebSocket` sticky session.
   - Extension: `Chrome Web Store`.
   - Desktop: `Tauri updater` + `GitHub Release`.
-- **Env:** `apps/server/.env` chứa `DEEPGRAM_API_KEY`, `GOOGLE_API_KEY`, `OPENAI_API_KEY`.
+- **Env:** `apps/server/.env` chứa `DEEPGRAM_API_KEY` (STT), `CUSTOM_API_KEY/BASE_URL/MODEL` (AI translate + summary). Không cần `GOOGLE/GEMINI/OPENAI` riêng.
 
 ## 6. Bảo mật & Quyền riêng tư
 
@@ -230,21 +231,25 @@ live-translate/
 │   │   ├── components/
 │   │   │   ├── CaptionOverlay.tsx    # 2-4 dòng EN/VI/JA, interim opacity 0.7
 │   │   │   ├── LanguageSelector.tsx  # Source/Target dropdown, auto-detect toggle
+│   │   │   ├── UrlIframePlayer.tsx   # URL -> iframe allow="microphone; camera; display-capture" full quyền
+│   │   │   ├── STTProviderSelector.tsx # deepgram | webspeech (mic/tab) | free
+│   │   │   ├── TranslateProviderSelector.tsx # ai (CUSTOM) | mymemory FREE
 │   │   │   ├── SummaryPanel.tsx      # Phase 3: realtime summary
 │   │   │   └── Controls.tsx          # font, opacity, pause, export
 │   │   ├── lib/
-│   │   │   ├── socket.ts             # socket.io-client, reconnect, heartbeat
+│   │   │   ├── socket.ts             # socket.io-client, reconnect, heartbeat, roomId default
 │   │   │   └── store.ts              # Zustand captionStore
 │   │   ├── audio/
 │   │   │   ├── worklet.ts            # AudioWorklet: resample 16kHz
+│   │   │   ├── webSpeech.ts          # Web Speech + captureTabAudioForWebSpeech (tab/iframe)
 │   │   │   ├── vad.wasm              # Silero VAD WASM
 │   │   │   └── capture.ts            # getDisplayMedia wrapper
-│   │   └── hooks/useLiveCaption.ts
-│   ├── extension/                    # Chrome MV3
-│   │   ├── manifest.json
-│   │   ├── background.ts             # service worker, tabCapture
-│   │   ├── offscreen.html/ts         # giữ audio stream (MV3 bắt buộc)
-│   │   └── popup.tsx
+│   │   └── hooks/useLiveCaption.ts   # audioSource mic|tab, fallback PCM khi web track không hỗ trợ
+│   ├── extension/                    # Chrome MV3 Side Panel
+│   │   ├── manifest.json             # sidePanel + tabCapture
+│   │   ├── background.js             # getMediaStreamId
+│   │   ├── sidepanel.html/js/css     # tabCapture -> Web Speech track + broadcast room
+│   │   └── permission.html/js        # mic permission helper
 │   ├── desktop/                      # Tauri 2 + Rust
 │   │   ├── src-tauri/
 │   │   │   ├── src/audio.rs          # cpal loopback (CoreAudio/WASAPI)
@@ -261,11 +266,10 @@ live-translate/
 │       │   │   └── whisper.py        # self-host faster-whisper
 │       │   ├── translate/
 │       │   │   ├── buffer.py         # SentenceBuffer đa ngôn ngữ
-│       │   │   ├── google.py
-│       │   │   └── llm.py            # Gemini/GPT streaming
+│       │   │   ├── free.py           # MyMemory FREE + LibreTranslate fallback
+│       │   │   └── llm.py            # Custom OpenAI-compatible (CUSTOM_*)
 │       │   ├── ai/
-│       │   │   ├── summarizer.py     # Phase 3: window 30s-5m
-│       │   │   └── prompts.py
+│       │   │   └── summarizer.py     # Phase 3: window 30s-5m (Custom LLM)
 │       │   └── db/models.py
 │       ├── Dockerfile
 │       └── .env.example
@@ -347,7 +351,7 @@ CREATE TABLE translations (
   transcript_id UUID REFERENCES transcripts(id),
   target_lang TEXT NOT NULL,
   text TEXT NOT NULL,
-  provider TEXT, -- 'google'|'llm'
+  provider TEXT, -- 'mymemory'|'llm' (custom)
   created_at TIMESTAMPTZ
 );
 
@@ -358,7 +362,7 @@ CREATE TABLE summaries (
   content TEXT, -- markdown
   chapters JSONB, -- [{title, start_ms}]
   action_items JSONB,
-  model TEXT, -- 'gemini-2.0-flash'
+  model TEXT, -- 'custom' = CUSTOM_MODEL
   created_at TIMESTAMPTZ
 );
 -- Redis: cache translate `${src}:${tgt}:${hash}`, rate limit, pub/sub room
@@ -375,7 +379,7 @@ CREATE TABLE summaries (
 | Network WS -> Server | 30-80ms | tùy region, chọn Fly.io gần user |
 | STT interim | 300-500ms | Deepgram streaming |
 | Sentence Buffer | 0-700ms | đợi dấu câu/pause, trung bình 300ms |
-| Translate | 150-300ms | Google 150ms, LLM 300ms streaming |
+| Translate | 150-300ms | MyMemory 150-200ms, Custom LLM 300ms streaming |
 | WS -> UI render | 30ms | |
 | **Tổng** | **~900-1300ms** | |
 
@@ -394,7 +398,7 @@ class TranslateProvider(ABC):
   async def translate_stream(self, text: str, src: str, tgt: str) -> AsyncIterator[str]: ...
 ```
 
-Server chọn provider qua `config.yaml`: `stt: deepgram | azure | whisper`, fallback tự động khi 429.
+Server chọn provider qua env: `STT_PROVIDER=deepgram|whisper|webspeech` và `TRANSLATE_PROVIDER=ai|free`, fallback `Custom -> MyMemory` khi 429/lỗi.
 
 ## 12. Triển khai & Env
 
@@ -409,13 +413,13 @@ services:
 **.env.example:**
 ```
 DEEPGRAM_API_KEY=dg_...
-AZURE_SPEECH_KEY=...
-GOOGLE_TRANSLATE_KEY=...
-GEMINI_API_KEY=...
+CUSTOM_API_KEY=...        # cho AI translate + summary (OpenAI-compatible)
+CUSTOM_BASE_URL=...       # vd https://api.openai.com/v1 hoặc http://localhost:11434/v1
+CUSTOM_MODEL=gpt-4o-mini
 DATABASE_URL=postgres://...
 REDIS_URL=redis://localhost:6379
-STT_PROVIDER=deepgram
-TRANSLATE_PROVIDER=google # hoặc llm
+STT_PROVIDER=deepgram      # deepgram | webspeech | whisper
+TRANSLATE_PROVIDER=auto    # auto | ai (custom) | free (MyMemory)
 ```
 
 **Deploy:**

@@ -3,7 +3,7 @@
 # Cách chạy:
 #   pip install -r requirements.txt
 #   export DEEPGRAM_API_KEY=dg_...
-#   export GOOGLE_TRANSLATE_KEY=... (optional - fallback nếu thiếu)
+#   export CUSTOM_API_KEY=... CUSTOM_BASE_URL=... CUSTOM_MODEL=...
 #   python -m src.main
 
 fastapi>=0.115.0

@@ -1,24 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "Live Translate - Tab Audio Capture",
-  "version": "0.1.0",
-  "description": "Capture audio of any tab, stream to Live Translate server",
-  "permissions": ["tabCapture", "activeTab", "offscreen", "storage"],
+  "name": "Live Translate - Tab Audio (Option 2 FREE)",
+  "version": "1.0",
+  "description": "Bắt âm thanh tab hiện tại (kể cả iframe) qua tabCapture + Web Speech FREE, hiện trong Side Panel và broadcast tới web UI",
+  "permissions": ["sidePanel", "activeTab", "tabs", "storage", "tabCapture"],
+  "host_permissions": ["https://translate.googleapis.com/*", "ws://localhost:8000/*", "wss://*/*"],
   "background": {
-    "service_worker": "background.ts"
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "action": {
-    "default_popup": "popup.html"
-  },
-  "host_permissions": [
-    "ws://localhost:8000/*",
-    "wss://*/*"
-  ],
-  "offscreen_documents": [
-    {
-      "url": "offscreen.html",
-      "justification": "Hold tab audio stream and AudioWorklet for PCM 16k",
-      "reasons": ["USER_MEDIA"]
-    }
-  ]
+    "default_title": "Open Live Translate"
+  }
 }

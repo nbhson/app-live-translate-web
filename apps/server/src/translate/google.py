@@ -1,4 +1,6 @@
-"""Google Cloud Translation v3 provider (with hash cache + rate limit)."""
+"""Google Cloud Translation v3 provider (legacy, giữ để backward compat - không dùng trong auto).
+Dùng CUSTOM_* cho AI, MyMemory cho FREE. File này chỉ còn cho test trực tiếp GoogleTranslator.
+"""
 
 import hashlib
 import os

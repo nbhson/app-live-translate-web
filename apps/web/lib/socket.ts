@@ -7,6 +7,8 @@ export type SocketOpts = {
   url: string;
   sourceLang: string;
   targetLangs: string[];
+  sttProvider?: string;
+  translateProvider?: string;
 };
 
 export function createLiveSocket(opts: SocketOpts) {
@@ -39,7 +41,7 @@ export function createLiveSocket(opts: SocketOpts) {
     ws.binaryType="arraybuffer";
     ws.onopen = () => {
       trigger("open",{});
-      emit("join",{ sourceLang: opts.sourceLang, targetLangs: opts.targetLangs });
+      emit("join",{ sourceLang: opts.sourceLang, targetLangs: opts.targetLangs, sttProvider: opts.sttProvider ?? "deepgram", translateProvider: opts.translateProvider ?? "ai" });
       if(hb) clearInterval(hb);
       hb=setInterval(()=> emit("ping",{}), 25000);
     };
@@ -65,9 +67,11 @@ export function createLiveSocket(opts: SocketOpts) {
     if(reconnectTimer) clearTimeout(reconnectTimer);
     ws?.close(); ws=null;
   };
-  const updateSettings = (src:string, tgts:string[]) => {
+  const updateSettings = (src:string, tgts:string[], extra?: { translateProvider?: string; sttProvider?: string }) => {
     opts.sourceLang=src; opts.targetLangs=tgts;
-    emit("settings:update",{ sourceLang: src, targetLangs: tgts });
+    if (extra?.translateProvider) opts.translateProvider = extra.translateProvider;
+    if (extra?.sttProvider) opts.sttProvider = extra.sttProvider;
+    emit("settings:update",{ sourceLang: src, targetLangs: tgts, ...extra });
   };
   connect();
   return { on, emit, sendBinary, close, updateSettings, get ws(){return ws;} };

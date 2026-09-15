@@ -22,9 +22,9 @@ live-translate/
 **Mục tiêu:** Pipeline EN (caption) -> VI (translate) chạy ổn định, độ trễ < 1.5s.
 
 **Scope chốt:**
-- Capture: Pure Web `getDisplayMedia` (POC) + Chrome Extension `tabCapture` (MVP). Tauri loopback là optional nếu cần system-wide.
-- STT: Deepgram Nova-3 `language=en` streaming (interim + final).
-- Translate: Sentence Buffer + Google Translate / DeepL `en->vi`.
+- Capture: Pure Web `getDisplayMedia` + `UrlIframePlayer` (iframe allow full quyền) + Chrome Extension Side Panel `tabCapture` (kể cả iframe) -> Web Speech `start(track)` FREE hoặc Deepgram PCM. Tauri loopback là optional nếu cần system-wide.
+- STT: Deepgram Nova-3 `language=en` streaming (interim + final) | Web Speech FREE | faster-whisper self-host.
+- Translate: Sentence Buffer + Custom AI (`CUSTOM_*`) / MyMemory FREE `en->vi`.
 - Frontend: Overlay 2 dòng EN/VI, IndexedDB history, export `.srt`.
 
 **Task:**
@@ -45,8 +45,8 @@ live-translate/
 
 **Thay đổi kiến trúc:**
 - Thêm `Language Router` ở server: `STT lang -> Translate lang`. Xem `ARCHITECTURE.md:4.3`.
-- STT provider phải hỗ trợ đa ngôn ngữ hoặc auto-detect. Deepgram hỗ trợ 30+ ngôn ngữ, Azure 75+, Whisper auto-detect.
-- Translate provider: Google/DeepL hỗ trợ 100+ cặp, hoặc LLM (Gemini/GPT) dịch linh hoạt hơn cho ngôn ngữ hiếm.
+- STT provider phải hỗ trợ đa ngôn ngữ hoặc auto-detect. Deepgram hỗ trợ 30+ ngôn ngữ, Whisper auto-detect, Web Speech tùy browser.
+- Translate provider: `MyMemory FREE` hỗ trợ 100+ cặp (5000 ký tự/ngày) hoặc `Custom AI` (`CUSTOM_*`) dịch linh hoạt hơn cho ngôn ngữ hiếm.
 
 **Task:**
 
@@ -62,7 +62,7 @@ live-translate/
   - Chuyển từ `en->vi` hardcode sang `translate(text, sourceLang, targetLang)`
   - Cache key đổi thành `${sourceLang}:${targetLang}:${hash(text)}`
   - Hỗ trợ `multi-target`: 1 câu EN dịch cùng lúc ra VI + JA (fan-out qua `Promise.all`)
-  - Nếu dùng LLM: prompt `Translate from ${sourceLang} to ${targetLang}, keep natural tone`
+  - Nếu dùng Custom AI: prompt `Translate from ${sourceLang} to ${targetLang}, keep natural tone` (chỉ cần `CUSTOM_*`)
 - [ ] **Buffer theo ngôn ngữ:** Một số ngôn ngữ không dùng dấu câu `.?!` (ZH, JA) -> tách câu theo `pause + độ dài` thay vì punctuation.
 - [ ] **Testing:** Ma trận test 3x3: EN->VI, JA->VI, VI->EN với video mẫu.
 
@@ -82,7 +82,7 @@ live-translate/
 
 - [ ] `apps/server/src/ai/summarizer.py`:
   - Buffer transcript theo `window 2 phút` hoặc `on-demand` khi user bấm "Tóm tắt"
-  - Gọi `Gemini 2.0 Flash / GPT-4o-mini` với prompt tóm tắt
+  - Gọi `Custom LLM` (`CUSTOM_API_KEY/BASE_URL/MODEL`, OpenAI-compatible) với prompt tóm tắt
   - Stream kết quả về UI qua `ws event: summary.chunk`
 - [ ] **Các loại summary:**
   - `Realtime Summary` (cập nhật mỗi 30s): 3 bullet points đang nói gì
@@ -151,18 +151,18 @@ Bạn đã có 3 phase lõi. Dưới đây là các tính năng có thể phát 
 
 ## Checklist kỹ thuật cần chuẩn bị
 
-- [ ] Tài khoản Deepgram (200$ free), Google Cloud Translation, OpenAI/Gemini API, ElevenLabs (nếu làm TTS)
+- [ ] Tài khoản Deepgram (200$ free nếu dùng deepgram) + Custom AI endpoint (`CUSTOM_BASE_URL` - Ollama/OpenRouter/Groq...) , ElevenLabs (nếu làm TTS)
 - [ ] Node 20+, Rust (nếu làm Tauri), Python 3.11, ffmpeg
 - [ ] Thiết kế prompt dịch live nếu dùng LLM (theo ngôn ngữ)
 - [ ] Dataset test: video EN, JA, VI mỗi loại 3 video để đo WER và latency đa ngôn ngữ
 
 ## Ước lượng chi phí vận hành (100 user, mỗi user 60 phút/ngày)
 
-- STT Deepgram: 100 * 60 * 30 * $0.0043 = ~$774/tháng (không đổi theo ngôn ngữ)
-- Translate Google: ~$30/tháng (tăng tuyến tính theo số target language)
-- LLM Summary (Gemini Flash): ~$15/tháng (chỉ khi user bấm tóm tắt)
+- STT Deepgram: 100 * 60 * 30 * $0.0043 = ~$774/tháng (không đổi theo ngôn ngữ) | `webspeech`/`faster-whisper` = 0đ
+- Translate MyMemory FREE: 0đ (~5000 ký tự/ngày/IP) | Custom AI: ~$10-30/tháng (tùy `CUSTOM_MODEL`, tăng tuyến tính theo số target)
+- Summary Custom AI: ~$5-15/tháng (chỉ khi user bấm tóm tắt, cùng `CUSTOM_*`)
 - Server Fly.io (2 vCPU + 4GB): ~$40/tháng
-- => Self-host Whisper sẽ giảm 80% cost STT nếu vượt 500 giờ/tháng
+- => Self-host Whisper sẽ giảm 80% cost STT nếu vượt 500 giờ/tháng; MyMemory/Custom thay Google giảm cost dịch về 0đ
 
 ## Definition of Done
 

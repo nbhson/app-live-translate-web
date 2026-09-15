@@ -10,3 +10,10 @@ __pycache__
 .DS_Store
 apps/web/.next
 apps/server/__pycache__
+.turbo
+.coverage
+htmlcov
+coverage
+.tsbuildinfo
+apps/web/coverage
+packages/shared/coverage

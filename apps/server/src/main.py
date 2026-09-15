@@ -17,11 +17,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.ai.summarizer import summarizer
 from src.stt.deepgram import DeepgramStream
 from src.translate.buffer import SentenceBuffer
+from src.translate.free import MyMemoryTranslator
 from src.translate.google import GoogleTranslator
 from src.translate.llm import LLMTranslator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("lt-server")
+
+# rooms: roomId -> set(Session) để extension + web UI cùng nhận broadcast
+_rooms: dict[str, set["Session"]] = {}
+
+async def _broadcast(room_id: str, event: str, payload: dict):
+    for sess in list(_rooms.get(room_id, set())):
+        try:
+            await sess.ws.send_json({"type": event, **payload})
+        except Exception:
+            pass
 
 app = FastAPI(title="Live Translate Server")
 app.add_middleware(
@@ -32,29 +43,37 @@ app.add_middleware(
 )
 
 
-def get_translator():
-    provider = os.environ.get("TRANSLATE_PROVIDER", "google")
-    if provider == "llm":
+def get_translator(provider: str | None = None):
+    # Chỉ dùng CUSTOM_API_KEY/CUSTOM_BASE_URL/CUSTOM_MODEL cho AI, còn lại là free (MyMemory)
+    p = (provider or os.environ.get("TRANSLATE_PROVIDER", "auto")).lower()
+    has_custom = bool(os.environ.get("CUSTOM_API_KEY") and os.environ.get("CUSTOM_BASE_URL"))
+    if p in ("ai", "llm", "custom"):
+        # nếu chọn AI nhưng chưa cấu hình CUSTOM -> fallback MyMemory để không trả placeholder [vi]
+        return LLMTranslator() if has_custom else MyMemoryTranslator()
+    if p in ("free", "mymemory"):
+        return MyMemoryTranslator()
+    # auto: nếu có CUSTOM key thì dùng AI, không thì free
+    if has_custom:
         return LLMTranslator()
-    return GoogleTranslator()
+    return MyMemoryTranslator()
 
 
 class Session:
-    def __init__(self, source_lang: str, target_langs: list[str], ws: WebSocket):
+    def __init__(self, source_lang: str, target_langs: list[str], ws: WebSocket, translate_provider: str | None = None, room_id: str = "default"):
         self.source_lang = source_lang
         self.target_langs = target_langs
         self.ws = ws
+        self.room_id = room_id
+        self.translate_provider = (translate_provider or os.environ.get("TRANSLATE_PROVIDER", "auto")).lower()
         self.stt: DeepgramStream | None = None
         self.buffer: SentenceBuffer | None = None
-        self.translator = get_translator()
+        self.translator = get_translator(self.translate_provider)
         self.transcripts: list[str] = []  # for AI summary
         self._emit_task: asyncio.Task | None = None
 
     async def emit(self, event: str, payload: dict):
-        try:
-            await self.ws.send_json({"type": event, **payload})
-        except Exception:
-            pass
+        # broadcast tới cả room để extension + web cùng thấy
+        await _broadcast(self.room_id, event, payload)
 
     async def start(self):
         self.stt = DeepgramStream(
@@ -193,8 +212,11 @@ async def websocket_endpoint(ws: WebSocket):
             return
         source_lang = msg.get("sourceLang", "en")
         target_langs = msg.get("targetLangs", ["vi"])
-        session = Session(source_lang, target_langs, ws)
-        logger.info(f"WS connected: source={source_lang}, targets={target_langs}")
+        translate_provider = msg.get("translateProvider") or msg.get("translate_provider")
+        room_id = msg.get("roomId") or "default"
+        session = Session(source_lang, target_langs, ws, translate_provider=translate_provider, room_id=room_id)
+        _rooms.setdefault(room_id, set()).add(session)
+        logger.info(f"WS connected: source={source_lang}, targets={target_langs} translate={session.translate_provider} room={room_id} total={len(_rooms[room_id])}")
 
         while True:
             try:
@@ -261,9 +283,33 @@ async def websocket_endpoint(ws: WebSocket):
                                 )
                     if "targetLangs" in msg and msg["targetLangs"]:
                         session.target_langs = msg["targetLangs"]
+                    if "translateProvider" in msg and msg["translateProvider"]:
+                        tp = str(msg["translateProvider"]).lower()
+                        if tp in ("ai", "llm", "custom", "free", "mymemory"):
+                            # chuẩn hóa: ai/llm/custom -> llm, mymemory -> free
+                            norm = "free" if tp in ("free", "mymemory") else "llm"
+                            session.translate_provider = norm
+                            session.translator = get_translator(norm)
+                            logger.info(f"Translate provider switched to {norm} ({session.translator.__class__.__name__})")
                     logger.info(
-                        f"Settings updated source={session.source_lang} targets={session.target_langs}"
+                        f"Settings updated source={session.source_lang} targets={session.target_langs} translate={session.translate_provider}"
                     )
+                elif t == "translate:request":
+                    # Client-side STT (Web Speech API) gửi text lên để server dịch - dùng cho provider=webspeech
+                    text = msg.get("text", "").strip()
+                    s_lang = msg.get("sourceLang", session.source_lang)
+                    t_langs = msg.get("targetLangs", session.target_langs)
+                    if text:
+                        # cũng lưu vào buffer/transcript để history + summary dùng được
+                        session.transcripts.append(text)
+                        await session.emit("stt:final", {"transcript": text, "language": s_lang, "words": [], "is_eos": True})
+                        # fan-out dịch qua SentenceBuffer hoặc trực tiếp
+                        for tl in t_langs:
+                            try:
+                                translated = await session.translator.translate(text, s_lang, tl)
+                                await session.emit("translate:final", {"source": text, "sourceLang": s_lang, "targetLang": tl, "text": translated, "provider": session.translator.__class__.__name__.lower()})
+                            except Exception as e:
+                                await session.emit("error", {"code": "TRANSLATE_ERROR", "message": str(e)})
                 elif t == "summary:request":
                     window = msg.get("window", "full")
                     transcript = msg.get("transcript") or " ".join(session.transcripts[-50:])
@@ -296,6 +342,9 @@ async def websocket_endpoint(ws: WebSocket):
     finally:
         if session:
             try:
+                _rooms.get(session.room_id, set()).discard(session)
+                if session.room_id in _rooms and not _rooms[session.room_id]:
+                    _rooms.pop(session.room_id, None)
                 await session.stop()
             except Exception:
                 pass

@@ -13,7 +13,10 @@ type ServerEvent =
   | { type: "summary:final"; summary: string; chapters: { title: string; start_ms: number }[]; actionItems: string[]; keywords?: string[] }
   | { type: "error"; code?: string; message: string };
 
-export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[] }) {
+import type { STTProvider } from "../components/STTProviderSelector";
+import type { TranslateProvider } from "../components/TranslateProviderSelector";
+
+export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]; sttProvider?: STTProvider; translateProvider?: TranslateProvider; audioSource?: "mic" | "tab" }) {
   const [interim, setInterim] = useState("");
   const [finals, setFinals] = useState<{ text: string; language: string; ts: number }[]>([]);
   const [translations, setTranslations] = useState<Record<string, string[]>>({});
@@ -33,6 +36,9 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
   finalsRef.current = finals;
   const optsRef = useRef(opts);
   optsRef.current = opts;
+  const sttProvider = opts.sttProvider ?? "deepgram";
+  const translateProvider = opts.translateProvider ?? "ai";
+  const audioSource = opts.audioSource ?? "mic";
 
   const url = (process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000") + "/ws";
 
@@ -88,7 +94,7 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
   }, []);
 
   useEffect(() => {
-    const sock = createLiveSocket({ url, sourceLang: optsRef.current.sourceLang, targetLangs: optsRef.current.targetLangs });
+    const sock = createLiveSocket({ url, sourceLang: optsRef.current.sourceLang, targetLangs: optsRef.current.targetLangs, sttProvider: (optsRef.current.sttProvider ?? "deepgram") as any, translateProvider: (optsRef.current.translateProvider ?? "ai") as any });
     socketRef.current = sock;
     const unsubOpen = sock.on("open", () => { setIsConnected(true); setError(undefined); });
     const unsubClose = sock.on("close", () => setIsConnected(false));
@@ -111,13 +117,81 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
     };
   }, [url, handleServerEvent]);
 
-  // Emit settings:update khi đổi ngôn ngữ + persist localStorage per Phase 2
+  // Emit settings:update khi đổi ngôn ngữ/provider + persist localStorage per Phase 2
   useEffect(() => {
-    socketRef.current?.updateSettings(opts.sourceLang, opts.targetLangs);
-    try { localStorage.setItem("lt:sourceLang", opts.sourceLang); localStorage.setItem("lt:targetLangs", JSON.stringify(opts.targetLangs)); } catch {}
-  }, [opts.sourceLang, opts.targetLangs.join(",")]);
+    socketRef.current?.updateSettings(opts.sourceLang, opts.targetLangs, { translateProvider, sttProvider });
+    try { localStorage.setItem("lt:sourceLang", opts.sourceLang); localStorage.setItem("lt:targetLangs", JSON.stringify(opts.targetLangs)); localStorage.setItem("lt:translateProvider", translateProvider); } catch {}
+  }, [opts.sourceLang, opts.targetLangs.join(","), translateProvider, sttProvider]);
 
   const startCapture = useCallback(async () => {
+    if (sttProvider === "webspeech") {
+      const { startWebSpeech, getWebSpeechSupportError, captureTabAudioForWebSpeech } = await import("../audio/webSpeech");
+      const err = getWebSpeechSupportError();
+      if (err) {
+        setError(err);
+        return;
+      }
+      setIsCapturing(true);
+      setError(undefined);
+      if (audioSource === "tab") {
+        // Web thường không hỗ trợ recognition.start(track) -> dùng PCM gửi server (Deepgram/free) để bắt iframe/tab audio
+        const isExtension = !!(window as any).chrome?.runtime?.id && window.location.protocol === "chrome-extension:";
+        if (!isExtension) {
+          // fallback: bắt tab qua getDisplayMedia PCM -> server STT (không dùng Web Speech track)
+          setError(undefined);
+          const { startCapture: startAudio } = await import("../audio/capture");
+          startAudio((buf: ArrayBuffer) => {
+            socketRef.current?.sendBinary(buf);
+          }).catch((e: any) => {
+            setIsCapturing(false);
+            setError(e.message ?? String(e));
+          });
+          return;
+        }
+        let track: MediaStreamTrack | null = null;
+        track = await captureTabAudioForWebSpeech();
+        if (!track) {
+          setError("Không lấy được tab audio. Hãy chọn This Tab + Share audio ở picker, hoặc chuyển về Mic.");
+          setIsCapturing(false);
+          return;
+        }
+        const cbs = {
+          onInterim: (text: string, lang: string) => {
+            setInterim(text);
+            setDetectedLang(lang);
+            setConfidence(0.95);
+          },
+          onFinal: (text: string, lang: string) => {
+            setInterim("");
+            const seg = { text, language: lang, ts: Date.now() };
+            setFinals((prev) => [...prev, seg]);
+            saveTranscript({ sessionId: "default", seq: finalsRef.current.length, text, language: lang, translations: {}, ts: seg.ts });
+            socketRef.current?.emit("translate:request", { text, sourceLang: optsRef.current.sourceLang, targetLangs: optsRef.current.targetLangs });
+          },
+          onError: (msg: string) => setError(msg),
+        };
+        startWebSpeech(optsRef.current.sourceLang, cbs, { track });
+        return;
+      }
+      // mic
+      const cbs = {
+        onInterim: (text: string, lang: string) => {
+          setInterim(text);
+          setDetectedLang(lang);
+          setConfidence(0.95);
+        },
+        onFinal: (text: string, lang: string) => {
+          setInterim("");
+          const seg = { text, language: lang, ts: Date.now() };
+          setFinals((prev) => [...prev, seg]);
+          saveTranscript({ sessionId: "default", seq: finalsRef.current.length, text, language: lang, translations: {}, ts: seg.ts });
+          socketRef.current?.emit("translate:request", { text, sourceLang: optsRef.current.sourceLang, targetLangs: optsRef.current.targetLangs });
+        },
+        onError: (msg: string) => setError(msg),
+      };
+      startWebSpeech(optsRef.current.sourceLang, cbs);
+      return;
+    }
     const { startCapture: startAudio } = await import("../audio/capture");
     setIsCapturing(true);
     setError(undefined);
@@ -127,13 +201,19 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
       setIsCapturing(false);
       setError(e.message ?? String(e));
     });
-  }, []);
+  }, [sttProvider, audioSource]);
 
   const stopCapture = useCallback(() => {
+    if (sttProvider === "webspeech") {
+      import("../audio/webSpeech").then(({ stopWebSpeech }) => stopWebSpeech());
+      setIsCapturing(false);
+      setError(undefined);
+      return;
+    }
     import("../audio/capture").then(({ stopCapture }) => stopCapture());
     socketRef.current?.emit("audio:stop", {});
     setIsCapturing(false);
-  }, []);
+  }, [sttProvider]);
 
   const clear = useCallback(() => {
     setInterim("");

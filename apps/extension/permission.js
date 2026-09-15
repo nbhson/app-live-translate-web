@@ -1,0 +1,1 @@
+document.getElementById('grantBtn').addEventListener('click', async()=>{ try{ const s=await navigator.mediaDevices.getUserMedia({audio:true}); s.getTracks().forEach(t=>t.stop()); document.getElementById('grantedArea').style.display='block'; setTimeout(()=>window.close(),1200);}catch(e){alert(e.message);} });

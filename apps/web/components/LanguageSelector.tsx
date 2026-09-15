@@ -19,13 +19,13 @@ export function LanguageSelector({ sourceLang, targetLangs, onSourceChange, onTa
     }
   };
   return (
-    <div className="flex gap-4 items-start">
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-zinc-400">Caption (nguồn)</span>
+    <>
+      <label className="flex flex-col gap-1.5 min-w-0">
+        <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400">Caption (nguồn)</span>
         <select
           value={sourceLang}
           onChange={(e) => onSourceChange(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm"
+          className="h-9 bg-zinc-900 border border-zinc-700 rounded-lg px-3 text-sm w-full focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
         >
           {SUPPORTED_SOURCE_LANGUAGES.map((l) => (
             <option key={l.code} value={l.code}>
@@ -33,19 +33,19 @@ export function LanguageSelector({ sourceLang, targetLangs, onSourceChange, onTa
             </option>
           ))}
         </select>
-        <span className="text-[11px] text-zinc-500">auto = Deepgram detect_language</span>
+        <span className="text-[11px] leading-tight text-zinc-500 min-h-[28px]">auto = Deepgram detect_language</span>
       </label>
 
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-zinc-400">Dịch sang (chọn 1-3, click để toggle)</span>
-        <div className="flex flex-wrap gap-1 max-w-[360px]">
+      <div className="flex flex-col gap-1.5 min-w-0">
+        <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400">Dịch sang (1–3)</span>
+        <div className="flex flex-wrap gap-1.5 min-h-[36px] content-start">
           {SUPPORTED_TARGET_LANGUAGES.map((l) => {
             const active = targetLangs.includes(l.code);
             return (
               <button
                 key={l.code}
                 onClick={()=>toggleTarget(l.code)}
-                className={`px-2 py-1 rounded text-xs border ${active ? "bg-amber-500 text-black border-amber-400" : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800"}`}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition ${active ? "bg-amber-500 text-black border-amber-400 shadow" : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600"}`}
                 title={l.label}
               >
                 {l.nativeLabel} {active ? "✓" : ""}
@@ -53,8 +53,8 @@ export function LanguageSelector({ sourceLang, targetLangs, onSourceChange, onTa
             );
           })}
         </div>
-        <span className="text-[11px] text-zinc-500">Đang chọn: {targetLangs.join(", ") || "(chưa chọn)"} — lưu vào localStorage</span>
+        <span className="text-[11px] leading-tight text-zinc-500 min-h-[28px]">Đang chọn: {targetLangs.join(", ") || "(chưa chọn)"} — lưu localStorage</span>
       </div>
-    </div>
+    </>
   );
 }

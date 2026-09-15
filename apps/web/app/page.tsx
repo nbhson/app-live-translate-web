@@ -66,22 +66,27 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100">
       {/* Header - sticky, glass */}
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-zinc-950/80 border-b border-zinc-800">
-        <div className="max-w-[1600px] mx-auto px-4 lg:px-6 py-3 flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center font-bold text-sm">LT</div>
-            <div>
-              <h1 className="text-[15px] font-semibold leading-none tracking-tight">Live Translate</h1>
-              <p className="text-[11px] text-zinc-500 leading-none mt-0.5">Iframe-first • EN → VI • seq-mapped</p>
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-zinc-950/85 border-b border-zinc-800">
+        <div className="max-w-[1600px] mx-auto px-4 lg:px-6 py-3">
+          {/* Top bar: brand + status */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center font-bold text-sm">LT</div>
+              <div>
+                <h1 className="text-[15px] font-semibold leading-none tracking-tight">Live Translate</h1>
+                <p className="text-[11px] text-zinc-500 leading-none mt-0.5">Iframe-first • EN → VI • seq-mapped</p>
+              </div>
             </div>
-            <span className={`ml-2 inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border ${live.isConnected ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${live.isConnected ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
-              {live.isConnected ? "Connected" : "Disconnected"}
-            </span>
-            {live.isCapturing && <span className="text-[11px] bg-red-600 text-white px-2.5 py-1 rounded-full animate-pulse">● Capturing</span>}
+            <div className="ml-auto flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border ${live.isConnected ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${live.isConnected ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
+                {live.isConnected ? "Connected" : "Disconnected"}
+              </span>
+              {live.isCapturing && <span className="text-[11px] bg-red-600 text-white px-2.5 py-1 rounded-full animate-pulse">● Capturing</span>}
+            </div>
           </div>
-
-          <div className="ml-auto flex gap-3 flex-wrap items-center">
+          {/* Options grid: 4 equal columns */}
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
             <STTProviderSelector value={sttProvider} onChange={setSttProvider} />
             <TranslateProviderSelector value={translateProvider} onChange={setTranslateProvider} />
             <LanguageSelector

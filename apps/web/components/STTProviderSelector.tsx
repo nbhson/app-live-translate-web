@@ -30,12 +30,12 @@ export function STTProviderSelector({ value, onChange }: Props) {
   };
 
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs text-zinc-400">STT Provider</span>
+    <label className="flex flex-col gap-1.5 min-w-0">
+      <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400">STT Provider</span>
       <select
         value={value}
         onChange={handleChange}
-        className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm min-w-[260px]"
+        className="h-9 bg-zinc-900 border border-zinc-700 rounded-lg px-3 text-sm w-full focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
       >
         {OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>
@@ -43,7 +43,7 @@ export function STTProviderSelector({ value, onChange }: Props) {
           </option>
         ))}
       </select>
-      <span className="text-[11px] text-zinc-500">
+      <span className="text-[11px] leading-tight text-zinc-500 min-h-[28px]">
         {OPTIONS.find((o) => o.value === value)?.desc}
         {value === "free" && (
           <>

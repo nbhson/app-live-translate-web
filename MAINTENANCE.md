@@ -1,87 +1,87 @@
-# Maintenance & Vận Hành
+# Maintenance & Operations
 
-Tài liệu cho việc duy trì, mở rộng và kiểm soát chi phí sau khi launch.
+Documentation for post-launch maintenance, scaling, and cost control.
 
-## 1. Giám sát (Observability)
+## 1. Observability
 
-### Metrics phải có
+### Required Metrics
 
 | Metric | Tool | Alert |
 |--------|------|-------|
 | `stt_latency_p95` (ms) | Server log + Prometheus | > 2000ms |
 | `translation_latency` | Server log | > 500ms |
 | `ws_disconnect_rate` | Socket.io + Posthog | > 5% |
-| `api_cost_per_minute` | Custom counter | > $0.006/phút |
-| `vad_filtered_ratio` | Server log | < 30% (lọc ít -> tốn tiền) |
-| `model_version` | DB field | track để rollback |
+| `api_cost_per_minute` | Custom counter | > $0.006/min |
+| `vad_filtered_ratio` | Server log | < 30% (low filtering -> wasted cost) |
+| `model_version` | DB field | track for rollback |
 
 ### Logging
 
-- Mỗi request log: `timestamp, userId, roomId, duration, sttProvider, translationProvider, cost`
-- Dùng `Sentry` cho error (Rust panic, WebSocket exception, API 429).
-- `Posthog` cho product analytics: số phút caption/ngày, retention.
+- Log every request: `timestamp, userId, roomId, duration, sttProvider, translationProvider, cost`
+- Use `Sentry` for errors (Rust panic, WebSocket exceptions, API 429).
+- `Posthog` for product analytics: caption minutes/day, retention.
 
-## 2. Quản lý Chi phí
+## 2. Cost Management
 
-STT là chi phí lớn nhất. Quy tắc:
+STT is the largest cost. Rules:
 
-1.  **VAD bắt buộc:** Không gửi chunk im lặng. Tiết kiệm 30-40%.
-2.  **Fallback chain:** `Deepgram (primary) -> Azure (secondary) -> faster-whisper self-host (tertiary)`. Khi primary 429 hoặc latency cao, tự switch.
-3.  **Self-host threshold:** Khi usage > 500 giờ/tháng, dựng `faster-whisper` trên `Fly GPU` hoặc `RunPod` sẽ rẻ hơn 70% so với Deepgram. Tính toán lại mỗi quý.
-4.  **Translation cache:** Cache `EN sentence -> VI` trong `Redis` TTL 7 ngày. Live caption hay lặp lại câu chào, câu nối.
-5.  **Rate limit:** Mỗi user tối đa 120 phút/ngày ở free tier.
+1.  **VAD is mandatory:** Do not send silent chunks. Saves 30-40%.
+2.  **Fallback chain:** `Deepgram (primary) -> Azure (secondary) -> faster-whisper self-host (tertiary)`. Auto-switch when primary returns 429 or high latency.
+3.  **Self-host threshold:** When usage > 500 hours/month, deploying `faster-whisper` on `Fly GPU` or `RunPod` is 70% cheaper than Deepgram. Re-evaluate quarterly.
+4.  **Translation cache:** Cache `EN sentence -> VI` in `Redis` with 7-day TTL. Live captions often repeat greetings and filler phrases.
+5.  **Rate limit:** Max 120 minutes/day per user on free tier.
 
-## 3. Quản lý Model & Provider
+## 3. Model & Provider Management
 
-- **Versioning:** Lưu `stt_model: "nova-3@2026-09-01"` và `translate_model: "custom:${CUSTOM_MODEL}"` hoặc `"mymemory"` vào DB `transcripts` table. Khi đổi model, có thể so sánh chất lượng.
-- **A/B Test:** Cho 10% user dùng Custom AI translate, 90% dùng MyMemory FREE, đo satisfaction (thumbs up).
-- **Update:** Deepgram/Custom provider update model không báo trước. Cần job cron weekly test với 3 video mẫu, đo WER/BLEU, alert nếu WER tăng > 2%.
-- **Backup provider:** Luôn giữ 2 API key cho mỗi provider, rotate khi key hết hạn.
+- **Versioning:** Store `stt_model: "nova-3@2026-09-01"` and `translate_model: "custom:${CUSTOM_MODEL}"` or `"mymemory"` in the `transcripts` table. Compare quality when switching models.
+- **A/B Test:** Route 10% of users to Custom AI translation, 90% to MyMemory FREE, measure satisfaction (thumbs up).
+- **Updates:** Deepgram/Custom providers may update models without notice. Run a weekly cron job testing with 3 sample videos, measure WER/BLEU, alert if WER increases > 2%.
+- **Backup provider:** Always keep 2 API keys per provider, rotate on expiry.
 
-## 4. Privacy & Bảo mật
+## 4. Privacy & Security
 
-- **Mặc định không lưu:** Audio blob không bao giờ lưu disk. Chỉ lưu transcript nếu user bật `Lưu lịch sử` trong Settings (opt-in).
-- **Transport:** Chỉ `wss://`, `https://`. Không log nội dung transcript ở server log (chỉ log length).
-- **Data retention:** Transcript lưu 30 ngày nếu user không xóa. Cho phép `Xóa tất cả` 1 click.
-- **Compliance:** Ghi rõ trong `Privacy Policy`: "App nghe audio để caption, không gửi audio tới bên thứ 3 ngoài STT provider đã chọn". Nếu self-host Whisper thì đây là USP về privacy.
-- **Tauri:** Cần `NSMicrophoneUsageDescription` và giải thích tại sao cần Screen Recording trên macOS.
+- **No storage by default:** Audio blobs are never written to disk. Only store transcripts if user enables `Save history` in Settings (opt-in).
+- **Transport:** `wss://`, `https://` only. Do not log transcript content on server (log length only).
+- **Data retention:** Keep transcripts for 30 days unless user deletes. Allow `Delete all` in one click.
+- **Compliance:** State clearly in `Privacy Policy`: "App listens to audio for captioning, does not send audio to third parties beyond the chosen STT provider". If self-hosting Whisper, this is a privacy USP.
+- **Tauri:** Requires `NSMicrophoneUsageDescription` and an explanation for Screen Recording permission on macOS.
 
 ## 5. CI/CD & Release
 
 ### Web + Server
 
-- `main` -> auto deploy `apps/web` lên Vercel, `apps/server` lên Fly.io via `GitHub Actions`.
-- Chạy `pnpm test` (unit cho SentenceBuffer, VAD) + `e2e` (playwright mock WebSocket) trước khi deploy.
+- `main` -> auto deploy `apps/web` to Vercel, `apps/server` to Fly.io via `GitHub Actions`.
+- Run `pnpm test` (unit for SentenceBuffer, VAD) + `e2e` (Playwright mock WebSocket) before deploying.
 
 ### Chrome Extension
 
-- `apps/extension` version bump trong `manifest.json`.
-- Upload zip lên Chrome Web Store via `chrome-webstore-upload-cli` trong CI. Review mất 1-3 ngày.
+- Bump version in `apps/extension` `manifest.json`.
+- Upload zip to Chrome Web Store via `chrome-webstore-upload-cli` in CI. Review takes 1-3 days.
 
 ### Desktop (Tauri)
 
-- Dùng `tauri-action` build cho `macOS (aarch64/x64)`, `Windows x64`, `Linux`.
-- `GitHub Release` + `Tauri updater` để auto-update. Ký code với Apple Developer cert (nếu không user sẽ bị Gatekeeper chặn).
+- Use `tauri-action` to build for `macOS (aarch64/x64)`, `Windows x64`, `Linux`.
+- `GitHub Release` + `Tauri updater` for auto-update. Sign with Apple Developer cert (otherwise blocked by Gatekeeper).
 
-## 6. Xử lý sự cố thường gặp
+## 6. Common Issues
 
-| Sự cố | Nguyên nhân | Cách fix |
+| Issue | Cause | Fix |
 |-------|-------------|----------|
-| Caption đứng hình | WebSocket disconnect, Deepgram 429 | Client auto-reconnect với backoff 1s, 2s, 5s. Server queue lại chunk. |
-| Dịch giật, sai ngữ pháp | SentenceBuffer tách câu sai | Tune ngưỡng `minWords=6`, `pauseMs=700ms`. Thêm LLM context window 3 câu trước. |
-| Tiếng vang, mic hú | Loopback + Mic cùng bật | UI cho chọn nguồn: `System Audio` hoặc `Mic` hoặc `Both`, mặc định `System` |
-| macOS không bắt được audio | Chưa cấp quyền Screen Recording | Hướng dẫn user vào `System Settings -> Privacy -> Screen Recording` bật app |
-| Chi phí tăng đột biến | Bot hoặc tab để qua đêm | Rate limit + auto-pause khi VAD im lặng > 2 phút |
+| Caption frozen | WebSocket disconnect, Deepgram 429 | Client auto-reconnect with backoff 1s, 2s, 5s. Server queues chunks. |
+| Jittery/inaccurate translation | SentenceBuffer splits sentences incorrectly | Tune `minWords=6`, `pauseMs=700ms`. Add LLM context window of 3 previous sentences. |
+| Echo / mic feedback | Loopback + Mic both enabled | UI lets user choose source: `System Audio` or `Mic` or `Both`, default `System` |
+| macOS cannot capture audio | Missing Screen Recording permission | Guide user to `System Settings -> Privacy -> Screen Recording` to enable app |
+| Cost spike | Bot or tab left overnight | Rate limit + auto-pause when VAD is silent > 2 minutes |
 
-## 7. Lộ trình bảo trì dài hạn (6-12 tháng)
+## 7. Long-term Maintenance Roadmap (6-12 months)
 
-- **Q1:** Ổn định MVP, thêm LLM translate streaming, thu thập feedback.
-- **Q2:** Self-host Whisper nếu cost cao, thêm ngôn ngữ mới (EN->JA).
-- **Q3:** Thêm tính năng `Summary` cuối buổi (dùng LLM tóm tắt transcript), `Keyword highlight`.
-- **Q4:** Đánh giá chuyển sang `WebRTC` nếu cần multi-user real-time (ví dụ: phòng họp chung caption).
+- **Q1:** Stabilize MVP, add LLM streaming translation, collect feedback.
+- **Q2:** Self-host Whisper if cost is high, add new languages (EN->JA).
+- **Q3:** Add end-of-session `Summary` (use LLM to summarize transcript), `Keyword highlight`.
+- **Q4:** Evaluate migration to `WebRTC` if multi-user real-time is needed (e.g., shared caption meeting room).
 
-## 8. Checklist On-call
+## 8. On-call Checklist
 
 - [ ] Sentry alert -> check Fly.io logs `fly logs -a live-translate-server`
 - [ ] Deepgram status https://status.deepgram.com
-- [ ] Rollback: `fly deploy --image <prev>` hoặc switch provider trong `apps/server/src/config.ts` flag `STT_PROVIDER=azure`
+- [ ] Rollback: `fly deploy --image <prev>` or switch provider via `apps/server/src/config.ts` flag `STT_PROVIDER=azure`

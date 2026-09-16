@@ -1,8 +1,8 @@
-# .github/workflows - CI skeleton
-# Chạy khi push tới main
+# .github/workflows - CI Skeleton
+# Runs on push to main
 
-# Cách sử dụng: copy nội dung vào .github/workflows/ci.yml
-# (Tạo khi có enough code cần test)
+# Usage: copy contents into .github/workflows/ci.yml
+# (Create when enough code needs testing)
 
 # name: ci
 # on: [push, pull_request]

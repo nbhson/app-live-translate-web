@@ -1,32 +1,32 @@
-# Kiến Trúc Live Translate
+# Live Translate Architecture
 
-## 1. Mục tiêu & Yêu cầu
+## 1. Goals & Requirements
 
-**Chức năng:**
-- **Phase 1 (Foundation):** Bắt bất kỳ audio nào phát ra từ máy tính (browser, Youtube, Spotify, Zoom, file local). Hiển thị Live Caption tiếng Anh (interim + final) + dịch song song sang tiếng Việt, độ trễ < 1.5s.
-- **Phase 2 (Đa ngôn ngữ):** Cho phép user tùy chọn `Source Language` (ngôn ngữ caption) và `Target Language` (ngôn ngữ dịch) bất kỳ, hỗ trợ auto-detect. Hỗ trợ multi-target (1 nguồn dịch ra 2-3 đích song song).
-- **Phase 3 (AI):** Từ transcript live sinh `Realtime Summary`, `Action Items`, `Keywords/Chapters`, `Q&A` trên transcript.
+**Functional:**
+- **Phase 1 (Foundation):** Capture any audio playing on the computer (browser, YouTube, Spotify, Zoom, local files). Display live English captions (interim + final) and translate in parallel to Vietnamese with latency < 1.5s.
+- **Phase 2 (Multi-language):** Allow users to choose any `Source Language` (caption language) and `Target Language` (translation language), with auto-detect support. Support multi-target (1 source translated to 2-3 targets in parallel).
+- **Phase 3 (AI):** Generate `Realtime Summary`, `Action Items`, `Keywords/Chapters`, and `Q&A` from live transcripts.
 
-**Phi chức năng:**
-- Độ trễ: < 800ms cho interim, < 1500ms cho final + translation.
-- Độ chính xác: WER < 12% cho EN (Deepgram Nova-3 ~ 9%).
-- Chi phí: < $0.005/phút.
-- Privacy: không lưu audio mặc định.
+**Non-functional:**
+- Latency: < 800ms for interim, < 1500ms for final + translation.
+- Accuracy: WER < 12% for EN (Deepgram Nova-3 ~ 9%).
+- Cost: < $0.005/minute.
+- Privacy: no audio stored by default.
 
-## 2. Tại sao Pure Web App không đủ
+## 2. Why Pure Web App Is Not Enough
 
-Browser chạy trong sandbox, `Web Audio API` và `MediaDevices` chỉ cho phép:
+Browsers run in a sandbox. `Web Audio API` and `MediaDevices` only allow:
 
-- `getUserMedia({audio:true})` -> Mic
-- `getDisplayMedia({audio:true})` -> Audio của Tab/Window mà user chủ động Share (có picker). Không bắt được audio nền, không bắt được app ngoài browser.
+- `getUserMedia({audio:true})` -> Microphone
+- `getDisplayMedia({audio:true})` -> Audio from a Tab/Window that the user explicitly shares (via picker). Cannot capture background audio or audio from apps outside the browser.
 
-=> Cần lớp Native hoặc Extension để vượt sandbox. Xem so sánh ở `README.md: So sánh 3 kiến trúc`.
+=> A native layer or extension is required to escape the sandbox. See comparison in `README.md`.
 
-**Quyết định:** Xây Core xử lý ở `apps/server` (WebSocket), 3 Capture Adapter cùng bắn về 1 interface. Frontend không cần biết nguồn audio từ đâu.
+**Decision:** Build core processing in `apps/server` (WebSocket) with 3 Capture Adapters feeding into a single interface. The frontend does not need to know where the audio comes from.
 
-## 3. Kiến trúc tổng quan
+## 3. High-Level Architecture
 
-### 3.1 Sơ đồ Component
+### 3.1 Component Diagram
 
 ```mermaid
 graph LR
@@ -46,7 +46,7 @@ graph LR
     B --- B1 & B2 & B3
 ```
 
-### 3.2 Luồng dữ liệu (Sequence)
+### 3.2 Data Flow (Sequence)
 
 ```mermaid
 sequenceDiagram
@@ -63,58 +63,58 @@ sequenceDiagram
     STT-->>WS: interim transcript "Hello, how are"
     WS-->>UI: transcript.interim
     STT-->>WS: final transcript "Hello, how are you?"
-    WS->>Trans: sentence buffer check (đủ dấu câu?)
+    WS->>Trans: sentence buffer check (punctuation present?)
     Trans->>Trans: Custom AI / MyMemory translate
     Trans-->>WS: "Xin chào, bạn khỏe không?"
     WS-->>UI: translation.final
 ```
 
-## 4. Chi tiết từng Service
+## 4. Service Details
 
 ### 4.1 Capture Layer (`apps/web`, `apps/extension`, `apps/desktop`)
 
-| Adapter | API | Format gửi đi | Ghi chú |
-|---------|-----|---------------|---------|
-| Web | `navigator.mediaDevices.getDisplayMedia({audio:true, video:true})` + `UrlIframePlayer` | WebM/PCM | Iframe `allow="microphone; camera; display-capture"` full quyền, audio iframe cũng là tab audio |
-| Web Speech FREE | `webkitSpeechRecognition` + `getDisplayMedia`/`tabCapture` track | Text (on-device) | `audioSource=mic` (mic) hoặc `tab` (kể cả iframe) - web thường `start(track)` không hỗ trợ nên fallback PCM Deepgram, Side Panel extension thì `start(track)` được |
-| Extension Side Panel | `chrome.tabCapture.getMediaStreamId({targetTabId})` -> `getUserMedia({chromeMediaSource:'tab', chromeMediaSourceId})` | PCM 16k (Deepgram) hoặc Text (Web Speech track) | `sidepanel.js` bắt tab hiện tại (kể cả iframe), loopback `AudioContext.destination` để vẫn nghe, broadcast `room=default` về web UI |
-| Tauri | Rust `cpal` + `coreaudio` (macOS) / `wasapi` (Windows) loopback | PCM 48kHz stereo | Bắt được toàn bộ system audio, cần xin quyền Screen Recording trên macOS |
+| Adapter | API | Format | Notes |
+|---------|-----|--------|-------|
+| Web | `navigator.mediaDevices.getDisplayMedia({audio:true, video:true})` + `UrlIframePlayer` | WebM/PCM | Iframe `allow="microphone; camera; display-capture"` with full permissions, iframe audio is also tab audio |
+| Web Speech FREE | `webkitSpeechRecognition` + `getDisplayMedia`/`tabCapture` track | Text (on-device) | `audioSource=mic` (mic) or `tab` (including iframe) - web `start(track)` is typically unsupported so it falls back to PCM Deepgram; Side Panel extension supports `start(track)` |
+| Extension Side Panel | `chrome.tabCapture.getMediaStreamId({targetTabId})` -> `getUserMedia({chromeMediaSource:'tab', chromeMediaSourceId})` | PCM 16k (Deepgram) or Text (Web Speech track) | `sidepanel.js` captures current tab (including iframe), loopback `AudioContext.destination` so audio remains audible, broadcasts `room=default` to web UI |
+| Tauri | Rust `cpal` + `coreaudio` (macOS) / `wasapi` (Windows) loopback | PCM 48kHz stereo | Captures all system audio, requires Screen Recording permission on macOS |
 
-Tất cả đều chuyển về `AudioWorklet` để trích PCM và gửi qua WebSocket `binaryType: arraybuffer`.
+All adapters pipe through `AudioWorklet` to extract PCM and send via WebSocket `binaryType: arraybuffer`.
 
 ### 4.2 Pre-processing Service
 
-Vị trí: có thể chạy ở Client (giảm bandwidth 60%) hoặc Server (đỡ tốn CPU client). Khuyên: **Client-side**.
+Location: can run on Client (reduces bandwidth by 60%) or Server (saves client CPU). Recommended: **Client-side**.
 
-- **Resample:** `libsamplerate` hoặc `OfflineAudioContext` về `16kHz, 16bit, mono` - chuẩn cho mọi STT.
-- **VAD:** `Silero VAD (ONNX, ~1MB)` chạy trong `Worklet` hoặc `WASM`. Ngưỡng 0.5, cắt chunk im lặng > 300ms không gửi.
-- **Chunking:** 100-300ms/chunk. Chunk quá nhỏ -> tốn overhead, quá to -> tăng trễ.
+- **Resample:** `libsamplerate` or `OfflineAudioContext` to `16kHz, 16bit, mono` - standard for all STT providers.
+- **VAD:** `Silero VAD (ONNX, ~1MB)` running in `Worklet` or `WASM`. Threshold 0.5, drop silent chunks > 300ms.
+- **Chunking:** 100-300ms/chunk. Too small -> overhead, too large -> higher latency.
 
-Code tham chiếu:
-- `apps/web/src/audio/worklet.ts` (sẽ tạo)
+Reference code:
+- `apps/web/src/audio/worklet.ts` (to be created)
 - `apps/server/src/audio/vad.py`
 
 ### 4.3 STT Service (`apps/server/src/stt/`)
 
-**Lựa chọn:**
+**Options:**
 
-1.  **Cloud Streaming (khuyên cho Phase 1-2):**
-    - `Deepgram Nova-3` : `wss://api.deepgram.com/v1/listen?model=nova-3&interim_results=true&punctuate=true&diarize=false&language=${sourceLang}` hoặc `detect_language=true` cho auto-detect
-    - `Azure Speech` : `wss://.../speech/recognition/conversation/cognitiveservices/v1?language=${sourceLang}` (hỗ trợ 75+ ngôn ngữ)
-    - Ưu: độ trễ thấp, có interim, tự xử lý punctuation, hỗ trợ đa ngôn ngữ sẵn.
-    - Nhược: cost, phụ thuộc mạng.
+1.  **Cloud Streaming (recommended for Phase 1-2):**
+    - `Deepgram Nova-3` : `wss://api.deepgram.com/v1/listen?model=nova-3&interim_results=true&punctuate=true&diarize=false&language=${sourceLang}` or `detect_language=true` for auto-detect
+    - `Azure Speech` : `wss://.../speech/recognition/conversation/cognitiveservices/v1?language=${sourceLang}` (supports 75+ languages)
+    - Pros: low latency, interim results, automatic punctuation, built-in multi-language support.
+    - Cons: cost, network dependency.
 
-2.  **Self-host:**
-    - `faster-whisper large-v3-turbo` + `CTranslate2` chạy trên GPU T4, hỗ trợ auto-detect 90+ ngôn ngữ.
-    - Cần tự implement streaming: dùng `buffer 1s + sliding window + VAD` để giả streaming. Trễ ~1.2-2s.
+2.  **Self-hosted:**
+    - `faster-whisper large-v3-turbo` + `CTranslate2` running on T4 GPU, supports auto-detect for 90+ languages.
+    - Requires custom streaming implementation: `1s buffer + sliding window + VAD` to simulate streaming. Latency ~1.2-2s.
 
-**Phase 2 - Đa ngôn ngữ:**
+**Phase 2 - Multi-language:**
 
-- Thêm `Language Router`: `STT lang` là param động từ `user_settings.sourceLang`. Nếu `sourceLang=auto` -> bật `detect_language`.
-- Trả về thêm `detectedLanguage` + `confidence` để UI hiện "Đang nghe: JA (92%)".
-- Lưu `language` vào `STTResult.language` để Translation biết nguồn.
+- Add `Language Router`: `STT lang` is a dynamic param from `user_settings.sourceLang`. If `sourceLang=auto` -> enable `detect_language`.
+- Return additional `detectedLanguage` + `confidence` for UI to display "Listening: JA (92%)".
+- Store `language` in `STTResult.language` so Translation knows the source.
 
-**Interface chuẩn hóa:**
+**Standardized Interface:**
 
 ```typescript
 // packages/shared/src/types.ts
@@ -128,13 +128,13 @@ type STTResult = {
 }
 ```
 
-Server là proxy + room broadcast: nhận PCM + `sourceLang` từ client -> forward tới Deepgram/Custom -> normalize -> `_broadcast(roomId)` tới mọi client trong `default` room (extension + web cùng thấy) `apps/server/src/main.py:13`.
+The server acts as a proxy + room broadcaster: receives PCM + `sourceLang` from client -> forwards to Deepgram/Custom -> normalizes -> `_broadcast(roomId)` to all clients in the `default` room (extension + web share the same view) `apps/server/src/main.py:13`.
 
 ### 4.4 Translation Service (`apps/server/src/translate/`)
 
-**Vấn đề:** Không dịch `interim` word-by-word, kết quả rất giật và sai ngữ pháp.
+**Problem:** Translating `interim` word-by-word produces jittery and grammatically incorrect results.
 
-**Giải pháp: Sentence Buffer (có hỗ trợ đa ngôn ngữ)**
+**Solution: Sentence Buffer (with multi-language support)**
 
 ```typescript
 // apps/server/src/translate/buffer.ts
@@ -142,97 +142,97 @@ class SentenceBuffer {
   buffer = "";
   onFinalTranscript(text: string, sourceLang: string) {
     this.buffer += text + " ";
-    // Với EN/VI/FR dùng punctuation [.?!], với JA/ZH dùng pause + độ dài
+    // For EN/VI/FR use punctuation [.?!], for JA/ZH use pause + length
     const sentences = isPunctuationLang(sourceLang) 
       ? splitByPunctuation(this.buffer) 
       : splitByPause(this.buffer, 700);
     if (sentences.complete.length > 0) {
-      translate(sentences.complete, sourceLang, targetLang); // fan-out nếu multi-target
+      translate(sentences.complete, sourceLang, targetLang); // fan-out if multi-target
       this.buffer = sentences.remainder;
     }
   }
 }
 ```
 
-**Provider & seq-mapped гарантия:**
+**Provider & seq-mapped guarantee:**
 
-- FREE: `MyMemory` (`api.mymemory.translated.net`) - không cần key, ~5000 ký tự/ngày/IP, cache `Map`+`Redis`, fallback `LibreTranslate`. Đủ cho demo/test.
-- AI chất lượng cao: `Custom OpenAI-compatible` (`CUSTOM_API_KEY/BASE_URL/MODEL` - Ollama, OpenRouter, Groq, Together, vLLM...) - prompt:
+- FREE: `MyMemory` (`api.mymemory.translated.net`) - no key required, ~5000 chars/day/IP, `Map`+`Redis` cache, `LibreTranslate` fallback. Sufficient for demo/testing.
+- High-quality AI: `Custom OpenAI-compatible` (`CUSTOM_API_KEY/BASE_URL/MODEL` - Ollama, OpenRouter, Groq, Together, vLLM...) - prompt:
   ```
   You are a live caption translator. Translate from ${sourceLang} to ${targetLang}, keep context, short and natural, no explanation.
   ```
-  Hỗ trợ streaming (`TRANSLATE_STREAM=1`), giữ ngữ cảnh tốt hơn cho ngôn ngữ hiếm.
-- **Seq mapping (fix AI chậm lệch câu):** Server gán `seq` monotonic cho mỗi sentence từ `SentenceBuffer` (`Session._sentence_seq`), emit `translate:final {seq, source, text}` và `stt:final {seq}` cho Web Speech. Client `useLiveCaption` lưu `sentences[seq]=source` và `translations[lang][seq]=text` (sparse array), `CaptionOverlay` & history render theo `seq` nên dù AI trả chậm/out-of-order vẫn khớp đúng câu EN gốc.
+  Supports streaming (`TRANSLATE_STREAM=1`), better context preservation for rare languages.
+- **Seq mapping (fix for slow/out-of-order AI):** Server assigns monotonic `seq` for each sentence from `SentenceBuffer` (`Session._sentence_seq`), emits `translate:final {seq, source, text}` and `stt:final {seq}` for Web Speech. Client `useLiveCaption` stores `sentences[seq]=source` and `translations[lang][seq]=text` (sparse array), `CaptionOverlay` & history render by `seq` so translations stay aligned even with slow/out-of-order AI responses.
 
-**Phase 2 - Đa ngôn ngữ:**
+**Phase 2 - Multi-language:**
 
-- API đổi thành `translate(text, sourceLang, targetLang)`, cache key `${sourceLang}:${targetLang}:${hash(text)}`.
-- Hỗ trợ `multi-target`: `Promise.all(targetLangs.map(t => translate(text, sourceLang, t)))`.
-- Thêm bảng `supported_languages` sync từ provider.
+- API becomes `translate(text, sourceLang, targetLang)`, cache key `${sourceLang}:${targetLang}:${hash(text)}`.
+- Supports `multi-target`: `Promise.all(targetLangs.map(t => translate(text, sourceLang, t)))`.
+- Add `supported_languages` table synced from provider.
 
-Cache: `Map<enSentence, viSentence>` + `Redis` nếu scale.
+Cache: `Map<enSentence, viSentence>` + `Redis` if scaling.
 
 ### 4.5 Frontend (`apps/web/src/`)
 
 - **State:** `Zustand` store `captionStore: { interimText, finalSegments[], translations: Record<targetLang, string>, sourceLang, targetLangs[] }`
-- **Kết nối:** `socket.io-client` với `reconnect + heartbeat`, gửi `sourceLang/targetLangs` khi handshake.
-- **UI:** Overlay kiểu Youtube:
-  - Dòng 1: Source language (trắng, opacity 0.7 cho interim, 1.0 cho final) + badge "JA 92%"
-  - Dòng 2+: Target language(s) (vàng cho VI, xanh cho EN...) - hỗ trợ 1-3 dòng dịch song song
-  - `LanguageSelector` dropdown chọn nguồn/đích, `SummaryPanel` cho Phase 3
+- **Connection:** `socket.io-client` with `reconnect + heartbeat`, sending `sourceLang/targetLangs` on handshake.
+- **UI:** YouTube-style overlay:
+  - Line 1: Source language (white, opacity 0.7 for interim, 1.0 for final) + badge "JA 92%"
+  - Line 2+: Target language(s) (yellow for VI, blue for EN...) - supports 1-3 parallel translation lines
+  - `LanguageSelector` dropdown for source/target, `SummaryPanel` for Phase 3
   - Controls: font size, opacity, position, pause, clear, export .srt
-- **History:** `IndexedDB (dexie)` cho local, `Postgres` cho cloud sync (optional). Thêm `pgvector` cho semantic search ở Phase 3+.
+- **History:** `IndexedDB (dexie)` for local, `Postgres` for cloud sync (optional). Add `pgvector` for semantic search in Phase 3+.
 
 ### 4.5.1 AI Service (Phase 3) `apps/server/src/ai/`
 
-- Chạy song song với Translation, không chặn luồng live. Buffer transcript theo window 30s-5 phút.
-- Gọi `Custom LLM` (`CUSTOM_API_KEY/BASE_URL/MODEL` - OpenAI-compatible) để sinh `summary`, `actionItems`, `keywords`, `chapters`.
-- Stream về UI qua `ws event: summary.chunk`, lưu vào table `summaries`. Nếu thiếu `CUSTOM_*` sẽ fallback heuristic.
+- Runs in parallel with Translation, does not block the live pipeline. Buffers transcript in 30s-5 minute windows.
+- Calls `Custom LLM` (`CUSTOM_API_KEY/BASE_URL/MODEL` - OpenAI-compatible) to generate `summary`, `actionItems`, `keywords`, `chapters`.
+- Streams to UI via `ws event: summary.chunk`, stores in `summaries` table. Falls back to heuristic if `CUSTOM_*` is missing.
 
 ### 4.6 Persistence
 
-- MVP: chỉ `IndexedDB` + `localStorage`.
-- Product: `Postgres` (transcript history) + `Redis` (pub/sub, cache translation, rate limit).
-- Không lưu blob audio, chỉ lưu `transcript` nếu user opt-in.
+- MVP: `IndexedDB` + `localStorage` only.
+- Production: `Postgres` (transcript history) + `Redis` (pub/sub, translation cache, rate limiting).
+- Do not store audio blobs, only store `transcript` if user opts in.
 
-## 5. Hạ tầng & Triển khai
+## 5. Infrastructure & Deployment
 
-- **Monorepo:** `pnpm + Turborepo` để share `packages/shared`.
-- **Container:** `Dockerfile` cho `apps/server` (Python 3.11 + ffmpeg + faster-whisper).
+- **Monorepo:** `pnpm + Turborepo` to share `packages/shared`.
+- **Container:** `Dockerfile` for `apps/server` (Python 3.11 + ffmpeg + faster-whisper).
 - **Deploy:**
   - Frontend: `Vercel` (Edge).
-  - Backend: `Fly.io` (có GPU `a10` rẻ) hoặc `Railway`/`Render`. Cần `WebSocket` sticky session.
+  - Backend: `Fly.io` (with cheap `a10` GPU) or `Railway`/`Render`. Requires `WebSocket` sticky sessions.
   - Extension: `Chrome Web Store`.
   - Desktop: `Tauri updater` + `GitHub Release`.
-- **Env:** `apps/server/.env` chứa `DEEPGRAM_API_KEY` (STT), `CUSTOM_API_KEY/BASE_URL/MODEL` (AI translate + summary). Không cần `GOOGLE/GEMINI/OPENAI` riêng.
+- **Env:** `apps/server/.env` contains `DEEPGRAM_API_KEY` (STT), `CUSTOM_API_KEY/BASE_URL/MODEL` (AI translate + summary). No separate `GOOGLE/GEMINI/OPENAI` key needed.
 
-## 6. Bảo mật & Quyền riêng tư
+## 6. Security & Privacy
 
-- Xin quyền `microphone / displayMedia` với UI giải thích rõ.
-- Audio chỉ stream qua `wss://`, không lưu server trừ khi user bật `Save history`.
-- CSP, CORS chặt cho WebSocket.
-- Trên macOS Tauri cần `NSMicrophoneUsageDescription`.
+- Request `microphone / displayMedia` permission with clear explanatory UI.
+- Audio streams only over `wss://`, not stored on server unless user enables `Save history`.
+- Strict CSP and CORS for WebSocket.
+- On macOS Tauri requires `NSMicrophoneUsageDescription`.
 
-## 7. Trade-offs đã chốt
+## 7. Trade-offs Decided
 
-- Chọn `WebSocket` thay vì `WebRTC`: đơn giản, đủ cho 1-1 streaming, dễ proxy tới STT provider.
-- Chọn `Sentence Buffer` thay vì `real-time word translate`: chất lượng dịch cao hơn, chấp nhận trễ thêm 300ms.
-- Chọn `Deepgram` làm default thay vì Whisper self-host: time-to-market nhanh, fallback được.
+- Chose `WebSocket` over `WebRTC`: simpler, sufficient for 1-1 streaming, easier to proxy to STT provider.
+- Chose `Sentence Buffer` over `real-time word translate`: higher translation quality, accepts additional 300ms latency.
+- Chose `Deepgram` as default over self-hosted Whisper: faster time-to-market, with fallback available.
 
-## 8. Cấu trúc thư mục cụ thể (sẽ scaffold)
+## 8. Directory Structure (to be scaffolded)
 
 ```
 live-translate/
 ├── apps/
 │   ├── web/                          # Next.js 15 (App Router)
 │   │   ├── app/
-│   │   │   ├── page.tsx              # Overlay chính: caption + language selector
-│   │   │   ├── history/page.tsx      # Lịch sử + semantic search
+│   │   │   ├── page.tsx              # Main overlay: caption + language selector
+│   │   │   ├── history/page.tsx      # History + semantic search
 │   │   │   └── layout.tsx
 │   │   ├── components/
-│   │   │   ├── CaptionOverlay.tsx    # 2-4 dòng EN/VI/JA, interim opacity 0.7
+│   │   │   ├── CaptionOverlay.tsx    # 2-4 lines EN/VI/JA, interim opacity 0.7
 │   │   │   ├── LanguageSelector.tsx  # Source/Target dropdown, auto-detect toggle
-│   │   │   ├── UrlIframePlayer.tsx   # URL -> iframe allow="microphone; camera; display-capture" full quyền
+│   │   │   ├── UrlIframePlayer.tsx   # URL -> iframe allow="microphone; camera; display-capture" full permissions
 │   │   │   ├── STTProviderSelector.tsx # deepgram | webspeech (mic/tab) | free
 │   │   │   ├── TranslateProviderSelector.tsx # ai (CUSTOM) | mymemory FREE
 │   │   │   ├── SummaryPanel.tsx      # Phase 3: realtime summary
@@ -245,7 +245,7 @@ live-translate/
 │   │   │   ├── webSpeech.ts          # Web Speech + captureTabAudioForWebSpeech (tab/iframe)
 │   │   │   ├── vad.wasm              # Silero VAD WASM
 │   │   │   └── capture.ts            # getDisplayMedia wrapper
-│   │   └── hooks/useLiveCaption.ts   # audioSource mic|tab, fallback PCM khi web track không hỗ trợ
+│   │   └── hooks/useLiveCaption.ts   # audioSource mic|tab, fallback PCM when web track unsupported
 │   ├── extension/                    # Chrome MV3 Side Panel
 │   │   ├── manifest.json             # sidePanel + tabCapture
 │   │   ├── background.js             # getMediaStreamId
@@ -266,7 +266,7 @@ live-translate/
 │       │   │   ├── azure.py          # fallback
 │       │   │   └── whisper.py        # self-host faster-whisper
 │       │   ├── translate/
-│       │   │   ├── buffer.py         # SentenceBuffer đa ngôn ngữ
+│       │   │   ├── buffer.py         # SentenceBuffer multi-language
 │       │   │   ├── free.py           # MyMemory FREE + LibreTranslate fallback
 │       │   │   └── llm.py            # Custom OpenAI-compatible (CUSTOM_*)
 │       │   ├── ai/
@@ -284,7 +284,7 @@ live-translate/
 └── .github/workflows/ci.yml
 ```
 
-## 9. Protocol cụ thể
+## 9. Protocol Details
 
 ### 9.1 WebSocket Events (Socket.io)
 
@@ -304,13 +304,13 @@ Server -> Client:
 socket.on('stt:interim', { transcript: string, language: string, confidence: number })
 socket.on('stt:final',   { transcript: string, language: string, words: Word[], is_eos: boolean })
 socket.on('translate:final', { source: string, targetLang: string, text: string })
-socket.on('translate:stream', { targetLang: string, token: string }) // nếu dùng LLM
+socket.on('translate:stream', { targetLang: string, token: string }) // if using LLM
 socket.on('summary:chunk', { token: string }) // Phase 3
 socket.on('summary:final', { summary: string, chapters: Chapter[], actionItems: string[] })
 socket.on('error', { code: 'STT_429'|'TRANSLATE_ERROR', message })
 ```
 
-### 9.2 REST (cho history & settings)
+### 9.2 REST (for history & settings)
 
 ```
 GET  /api/sessions?userId=xxx          # list sessions
@@ -319,10 +319,10 @@ POST /api/sessions/:id/summary         # trigger summary on-demand
 GET  /api/languages                    # supported source/target matrix
 ```
 
-## 10. Database Schema (Postgres + pgvector cho Phase 3)
+## 10. Database Schema (Postgres + pgvector for Phase 3)
 
 ```sql
--- users (hoặc dùng Clerk/Supabase Auth)
+-- users (or use Clerk/Supabase Auth)
 CREATE TABLE users (id UUID PRIMARY KEY, email TEXT, created_at TIMESTAMPTZ);
 
 CREATE TABLE sessions (
@@ -337,14 +337,14 @@ CREATE TABLE sessions (
 CREATE TABLE transcripts (
   id UUID PRIMARY KEY,
   session_id UUID REFERENCES sessions(id),
-  seq INT, -- thứ tự
-  type TEXT, -- 'interim'|'final' (chỉ lưu final)
+  seq INT, -- order
+  type TEXT, -- 'interim'|'final' (only final stored)
   text TEXT NOT NULL,
   language TEXT,
   confidence REAL,
   start_ms INT, end_ms INT,
   created_at TIMESTAMPTZ DEFAULT now(),
-  embedding VECTOR(1536) -- pgvector cho semantic search (Phase 3)
+  embedding VECTOR(1536) -- pgvector for semantic search (Phase 3)
 );
 
 CREATE TABLE translations (
@@ -371,18 +371,18 @@ CREATE TABLE summaries (
 
 ## 11. Latency Budget & Provider Abstraction
 
-**Budget end-to-end 1.5s:**
+**End-to-end budget 1.5s:**
 
-| Chặng | Thời gian | Ghi chú |
-|-------|-----------|---------|
+| Stage | Time | Notes |
+|-------|------|-------|
 | Capture + Worklet | 50ms | AudioWorklet buffer 128 samples |
 | VAD + Resample | 20ms | WASM |
-| Network WS -> Server | 30-80ms | tùy region, chọn Fly.io gần user |
+| Network WS -> Server | 30-80ms | depends on region, choose Fly.io near user |
 | STT interim | 300-500ms | Deepgram streaming |
-| Sentence Buffer | 0-700ms | đợi dấu câu/pause, trung bình 300ms |
+| Sentence Buffer | 0-700ms | wait for punctuation/pause, avg 300ms |
 | Translate | 150-300ms | MyMemory 150-200ms, Custom LLM 300ms streaming |
 | WS -> UI render | 30ms | |
-| **Tổng** | **~900-1300ms** | |
+| **Total** | **~900-1300ms** | |
 
 **Provider Abstraction:**
 
@@ -399,9 +399,9 @@ class TranslateProvider(ABC):
   async def translate_stream(self, text: str, src: str, tgt: str) -> AsyncIterator[str]: ...
 ```
 
-Server chọn provider qua env: `STT_PROVIDER=deepgram|whisper|webspeech` và `TRANSLATE_PROVIDER=ai|free`, fallback `Custom -> MyMemory` khi 429/lỗi.
+Server selects provider via env: `STT_PROVIDER=deepgram|whisper|webspeech` and `TRANSLATE_PROVIDER=ai|free`, fallback `Custom -> MyMemory` on 429/error.
 
-## 12. Triển khai & Env
+## 12. Deployment & Env
 
 **docker-compose.yml:**
 ```yaml
@@ -414,8 +414,8 @@ services:
 **.env.example:**
 ```
 DEEPGRAM_API_KEY=dg_...
-CUSTOM_API_KEY=...        # cho AI translate + summary (OpenAI-compatible)
-CUSTOM_BASE_URL=...       # vd https://api.openai.com/v1 hoặc http://localhost:11434/v1
+CUSTOM_API_KEY=...        # for AI translate + summary (OpenAI-compatible)
+CUSTOM_BASE_URL=...       # e.g. https://api.openai.com/v1 or http://localhost:11434/v1
 CUSTOM_MODEL=gpt-4o-mini
 DATABASE_URL=postgres://...
 REDIS_URL=redis://localhost:6379
@@ -425,7 +425,6 @@ TRANSLATE_PROVIDER=auto    # auto | ai (custom) | free (MyMemory)
 
 **Deploy:**
 - Web: `Vercel` (Next.js), env `NEXT_PUBLIC_WS_URL=wss://api.live-translate.fly.dev`
-- Server: `Fly.io` với `fly.toml` scale 1-3 instances, sticky session qua `fly-replay` hoặc Redis pub/sub để broadcast cross-instance.
+- Server: `Fly.io` with `fly.toml` scale 1-3 instances, sticky session via `fly-replay` or Redis pub/sub for cross-instance broadcast.
 - Extension: `pnpm build:extension` -> zip -> Chrome Web Store.
 - Desktop: `pnpm tauri build` -> GitHub Release + updater.
-

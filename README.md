@@ -2,6 +2,8 @@
 
 Real-time web application that displays live English captions from any audio playing on your computer and translates them instantly into Vietnamese in parallel.
 
+![Live Translate Demo](./image.png)
+
 > **Key Constraint:** A pure Web App cannot capture `system audio` due to Browser Sandbox restrictions. This project follows the roadmap `Pure Web (POC) -> Chrome Extension -> Tauri Hybrid` sharing a single core backend.
 
 ## Architecture Overview

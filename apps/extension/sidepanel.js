@@ -5,7 +5,18 @@ const SILENCE_THRESHOLD=1500, MAX_INTERIM_LENGTH=100;
 const toggleBtn=document.getElementById('toggleBtn'), playIcon=document.getElementById('playIcon'), stopIcon=document.getElementById('stopIcon'), btnText=document.getElementById('btnText'), clearBtn=document.getElementById('clearBtn'), statusText=document.getElementById('statusText'), audioSourceSelect=document.getElementById('audioSourceSelect');
 const idleState=document.getElementById('idleState'), recordingIndicator=document.getElementById('recordingIndicator'), liveText=document.getElementById('liveText'), permissionOverlay=document.getElementById('permissionOverlay'), grantPermissionBtn=document.getElementById('grantPermissionBtn');
 
-function ensureWS(){ if(ws && ws.readyState===WebSocket.OPEN) return ws; ws=new WebSocket("ws://localhost:8000/ws"); ws.binaryType="arraybuffer"; ws.onopen=()=>ws.send(JSON.stringify({type:"join",sourceLang:"en",targetLangs:["vi"],roomId:"default"})); return ws; }
+// Server WebSocket URL. Default points at the local dev server; override via
+// chrome.storage.local: chrome.storage.local.set({ wsUrl: "wss://your-server.example.com" })
+const DEFAULT_WS_URL = "ws://localhost:8000";
+let WS_BASE_URL = DEFAULT_WS_URL;
+if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+  chrome.storage.local.get(['wsUrl'])
+    .then(({ wsUrl: stored }) => { if (stored) WS_BASE_URL = String(stored).replace(/\/+$/, ''); })
+    .catch(() => { /* storage unavailable — keep default */ });
+}
+function wsEndpoint() { return WS_BASE_URL.replace(/\/+$/, '') + '/ws'; }
+
+function ensureWS(){ if(ws && ws.readyState===WebSocket.OPEN) return ws; ws=new WebSocket(wsEndpoint()); ws.binaryType="arraybuffer"; ws.onopen=()=>ws.send(JSON.stringify({type:"join",sourceLang:"en",targetLangs:["vi"],roomId:"default"})); return ws; }
 function broadcastToRoom(text){ ensureWS(); const send=()=>{ if(ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:"translate:request",text,sourceLang:"en",targetLangs:["vi"]})); }; if(ws.readyState===WebSocket.OPEN) send(); else ws.addEventListener("open",send,{once:true}); }
 
 toggleBtn.addEventListener('click', toggleListening);

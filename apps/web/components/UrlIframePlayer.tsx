@@ -126,7 +126,7 @@ export function UrlIframePlayer() {
         )}
 
         <p className="text-[11px] text-zinc-500 leading-relaxed">
-          Iframe runs with <code className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-300">allow="microphone; camera; display-capture"</code> — audio in iframe is still <b className="text-zinc-300">tab audio</b>. Use <b className="text-zinc-300">Start</b> with source <b className="text-zinc-300">Tab</b> (extension Side Panel or Share audio picker) for caption & translate.
+          Iframe chạy trong <code className="bg-zinc-800 px-1 py-0.5 rounded text-zinc-300">sandbox</code> (không microphone/camera) — audio in iframe is still <b className="text-zinc-300">tab audio</b>. Use <b className="text-zinc-300">Start</b> with source <b className="text-zinc-300">Tab</b> (extension Side Panel or Share audio picker) for caption &amp; translate.
           {activeUrl.includes("youtube.com/embed") && <span className="ml-2 text-amber-400">YouTube embed autoplay enabled.</span>}
         </p>
       </div>
@@ -137,7 +137,14 @@ export function UrlIframePlayer() {
           <iframe
             src={activeUrl}
             className="w-full h-full absolute inset-0"
-            allow="autoplay; encrypted-media; fullscreen; microphone; camera; display-capture; clipboard-read; clipboard-write; geolocation; picture-in-picture"
+            // Bỏ camera/clipboard-read/write/geolocation — URL do user paste BẤT
+            // KỲ: trang độc được cấp camera/mic/clipboard là rủi ro lớn. Giữ
+            // những gì use-case thực sự cần (âm thanh: autoplay + encrypted-media).
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            // sandbox + allow-same-origin đồng thời = gần như không sandbox;
+            // nếu cần same-origin (nghe tab audio vẫn hoạt động vì tab capture
+            // là cấp browser) thì review kỹ từng site. Ưu tiên an toàn.
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
             allowFullScreen
           />
           {/* floating badge */}

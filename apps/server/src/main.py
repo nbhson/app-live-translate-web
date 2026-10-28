@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import time
+from collections import deque
 from pathlib import Path
 
 # load .env if present (so CUSTOM_* from apps/server/.env is available without manual export)
@@ -98,7 +99,9 @@ class Session:
         self.stt: DeepgramStream | None = None
         self.buffer: SentenceBuffer | None = None
         self.translator = get_translator(self.translate_provider)
-        self.transcripts: list[str] = []  # for AI summary
+        # deque bounded: session họp dài hàng giờ trước đây giữ MỌI transcript
+        # trong RAM (memory exhaustion) — 2000 câu cuối là đủ cho summary context.
+        self.transcripts: deque[str] = deque(maxlen=2000)  # for AI summary
         self._emit_task: asyncio.Task | None = None
         self._sentence_seq: int = 0  # monotonic sentence id to map translation correctly even when AI is slow
 
@@ -287,7 +290,10 @@ async def websocket_endpoint(ws: WebSocket):
                     try:
                         await session.start()
                     except Exception as e:
-                        await session.emit("error", {"code": "STT_CONNECT", "message": str(e)})
+                        # str(e) có thể chứa upstream URL/key shape (llm.py nhúng
+                        # endpoint vào exception) — client chỉ nhận code cố định.
+                        logger.error(f"STT connect failed: {e}")
+                        await session.emit("error", {"code": "STT_CONNECT", "message": "Speech recognition connection failed. Check server logs."})
                         continue
                 if session.stt and msg_data["bytes"]:
                     await session.stt.send_pcm(msg_data["bytes"])
@@ -328,8 +334,9 @@ async def websocket_endpoint(ws: WebSocket):
                                 )
                                 await session.stt.connect()
                             except Exception as e:
+                                logger.error(f"STT reconnect failed: {e}")
                                 await session.emit(
-                                    "error", {"code": "STT_RECONNECT", "message": str(e)}
+                                    "error", {"code": "STT_RECONNECT", "message": "Speech recognition reconnect failed. Check server logs."}
                                 )
                     if "targetLangs" in msg and msg["targetLangs"]:
                         session.target_langs = msg["targetLangs"]
@@ -365,7 +372,8 @@ async def websocket_endpoint(ws: WebSocket):
                                 translated = await session.translator.translate(text, s_lang, tl)
                                 await session.emit("translate:final", {"seq": seq, "source": text, "sourceLang": s_lang, "targetLang": tl, "text": translated, "provider": session.translator.__class__.__name__.lower()})
                             except Exception as e:
-                                await session.emit("error", {"code": "TRANSLATE_ERROR", "message": str(e)})
+                                logger.error(f"translate failed ({s_lang}->{tl}): {e}")
+                                await session.emit("error", {"code": "TRANSLATE_ERROR", "message": f"Translation failed for {tl}. Check server logs."})
                 elif t == "summary:request":
                     window = msg.get("window", "full")
                     transcript = msg.get("transcript") or " ".join(session.transcripts[-50:])
@@ -390,7 +398,8 @@ async def websocket_endpoint(ws: WebSocket):
                             },
                         )
                     except Exception as e:
-                        await session.emit("error", {"code": "SUMMARY_ERROR", "message": str(e)})
+                        logger.error(f"summary failed: {e}")
+                        await session.emit("error", {"code": "SUMMARY_ERROR", "message": "Summary generation failed. Check server logs."})
     except WebSocketDisconnect:
         logger.info("WS disconnected")
     except Exception as e:

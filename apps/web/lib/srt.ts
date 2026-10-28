@@ -16,7 +16,9 @@ export function toSrt(segments: { text: string; language: string; ts: number }[]
     const seg = segments[i];
     const start = seg.ts - startBase;
     const nextTs = segments[i+1]?.ts ?? seg.ts + 3000;
-    const end = Math.min(nextTs - 200, start + 5000);
+    // Clamp end >= start + 1: timestamps sát nhau trước đây cho end < start
+    // (cue duration âm = SRT/VTT không hợp lệ, player skip cả cue).
+    const end = Math.max(start + 1, Math.min(nextTs - 200, start + 5000));
     const trans = translations[targetLang]?.[i];
     const body = trans ? `${seg.text}\n${trans}` : seg.text;
     out += `${i+1}\n${fmt(start)} --> ${fmt(end)}\n${body}\n\n`;
@@ -34,5 +36,7 @@ export function downloadSrt(filename: string, content: string) {
 
 export function toVtt(segments: { text: string; ts:number }[], translations: Record<string,string[]>, targetLang: string): string {
   const srt = toSrt(segments as any, translations, targetLang);
-  return "WEBVTT\n\n" + srt.replaceAll(",", ".");
+  // Chỉ đổi dấu ',' trong TIMESTAMP (dòng chứa "-->") thành '.': replaceAll
+  // trên toàn bộ text trước đây biến dấu phẩy TRONG nội dung caption thành chấm.
+  return "WEBVTT\n\n" + srt.replace(/^(\d{2}:\d{2}:\d{2}),(\d{3}) --> (\d{2}:\d{2}:\d{2}),(\d{3})$/gm, "$1.$2 --> $3.$4");
 }

@@ -43,7 +43,11 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
   const translateProvider = opts.translateProvider ?? "ai";
   const audioSource = opts.audioSource ?? "mic";
 
-  const url = (process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000") + "/ws";
+  // WS URL mặc định derive theo page protocol: hardcode `ws://` gãy khi deploy
+  // HTTPS (mixed content bị browser chặn luôn).
+  const wsUrl = process.env.NEXT_PUBLIC_WS_URL
+    ?? (typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:") + `//${window.location.hostname}:8000`;
+  const url = wsUrl + "/ws";
 
   const handleServerEvent = useCallback((ev: ServerEvent & Record<string,any>) => {
     switch (ev.type) {
@@ -150,15 +154,9 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
     const unsubAll = sock.on("*", (data:any)=> {
       if (data?.type) handleServerEvent(data as ServerEvent);
     });
-    // specific listeners
-    sock.on("stt:interim", (d)=> handleServerEvent(d as any));
-    sock.on("stt:final", (d)=> handleServerEvent(d as any));
-    sock.on("translate:final", (d)=> handleServerEvent(d as any));
-    sock.on("translate:stream", (d)=> handleServerEvent(d as any));
-    sock.on("summary:chunk", (d)=> handleServerEvent(d as any));
-    sock.on("summary:final", (d)=> handleServerEvent(d as any));
-    sock.on("suggest:result", (d)=> handleServerEvent(d as any));
-    sock.on("error", (d)=> handleServerEvent(d as any));
+    // KHÔNG đăng ký per-type listeners: `sock.on("*", ...)` đã trigger cho mọi
+    // event — đăng ký cả per-type (trước đây) làm handleServerEvent chạy 2 lần
+    // mỗi event → finals/translations/suggestions BỊ NHÂN ĐÔI.
 
     return () => {
       unsubOpen(); unsubClose(); unsubErr(); unsubAll();

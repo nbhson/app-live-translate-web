@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import ssl
 
@@ -17,10 +18,18 @@ except ImportError:
 
 def _ssl_context() -> ssl.SSLContext | None:
     """Trả về SSLContext dùng certifi nếu có, fix CERTIFICATE_VERIFY_FAILED trên macOS."""
-    # Cho phép bypass khi DEV (không khuyến nghị prod)
+    # Bypass TLS verification là MITM risk: kết nối này mang API key + audio.
+    # Chỉ chấp nhận khi DEV tường minh; production (NODE_ENV/ENV=production) fail hard.
     if os.environ.get("DEEPGRAM_INSECURE_SSL") == "1":
-        ctx = ssl._create_unverified_context()
-        return ctx
+        if os.environ.get("ENV", "").lower() == "production" or os.environ.get("NODE_ENV") == "production":
+            raise RuntimeError(
+                "DEEPGRAM_INSECURE_SSL=1 is forbidden in production — fix the cert chain instead "
+                "(install certifi: pip install certifi)"
+            )
+        logging.getLogger("lt-server").warning(
+            "DEEPGRAM_INSECURE_SSL=1 — TLS verification DISABLED (dev only, MITM risk)"
+        )
+        return ssl._create_unverified_context()
     if _HAS_CERTIFI:
         try:
             return ssl.create_default_context(cafile=certifi.where())
@@ -68,7 +77,7 @@ class DeepgramStream:
         import logging
 
         logger = logging.getLogger("lt-server")
-        logger.info(f"[deepgram] connecting {self._url()[:80]}... key={self.api_key[:6]}...")
+        logger.info(f"[deepgram] connecting {self._url()[:80]}...")  # KHÔNG log key prefix — logs là nơi leak đầu tiên
         self.ws = await websockets.connect(
             self._url(),
             additional_headers={"Authorization": f"Token {self.api_key}"},

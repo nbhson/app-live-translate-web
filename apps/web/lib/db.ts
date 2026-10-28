@@ -43,16 +43,22 @@ export async function saveTranscript(rec: Omit<HistoryRecord, "id">) {
 }
 
 export async function getHistory(sessionId?: string): Promise<HistoryRecord[]> {
+  let db: IDBDatabase | null = null;
   try {
-    const db = await openDB();
+    db = await openDB();
     return await new Promise<HistoryRecord[]>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readonly");
+      const tx = db!.transaction(STORE, "readonly");
       const store = tx.objectStore(STORE);
       const req = sessionId ? store.index("sessionId").getAll(sessionId) : store.getAll();
       req.onsuccess = () => resolve(req.result as HistoryRecord[]);
       req.onerror = () => reject(req.error);
     });
   } catch { return []; }
+  finally {
+    // Đóng connection kể cả khi lỗi — leak trước đây (save/clear thì có close,
+    // getHistory thì không).
+    db?.close();
+  }
 }
 
 export async function clearHistory(sessionId?: string) {

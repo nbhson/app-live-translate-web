@@ -8,6 +8,7 @@ export type WebSpeechCallbacks = {
 };
 
 let recognition: any | null = null;
+let restartCount = 0;
 let tabStream: MediaStream | null = null;
 let tabAudioCtx: AudioContext | null = null;
 
@@ -31,6 +32,7 @@ export function startWebSpeech(lang: string, cbs: WebSpeechCallbacks, opts?: { t
   }
   stopWebSpeech();
   recognition = new SR();
+  restartCount = 0; // session mới — reset retry budget
   recognition.continuous = true;
   recognition.interimResults = true;
   // Web Speech expects BCP-47: en-US, vi-VN
@@ -57,14 +59,19 @@ export function startWebSpeech(lang: string, cbs: WebSpeechCallbacks, opts?: { t
   };
   recognition.onend = () => {
     // tự restart nếu vẫn ở trạng thái capturing (continuous đôi khi dừng sau 30s)
-    if (recognition) {
-      try {
-        if (opts?.track) {
-          // validate track trước khi restart
-          if (opts.track.readyState !== 'live' || opts.track.kind !== 'audio') throw new Error('Track not live');
-          (recognition as any).start(opts.track);
-        } else recognition.start();
-      } catch {}
+    // Retry counter + delay tăng dần: restart ngay lập tức khi start() liên tục
+    // throw trước đây thành busy-loop vô hạn.
+    if (recognition && restartCount < 20) {
+      restartCount += 1;
+      setTimeout(() => {
+        try {
+          if (opts?.track) {
+            // validate track trước khi restart
+            if (opts.track.readyState !== 'live' || opts.track.kind !== 'audio') throw new Error('Track not live');
+            (recognition as any).start(opts.track);
+          } else recognition.start();
+        } catch {}
+      }, Math.min(200 * restartCount, 2000));
     }
   };
   try {

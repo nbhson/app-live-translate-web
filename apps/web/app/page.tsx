@@ -37,7 +37,16 @@ export default function Home() {
       const sp = localStorage.getItem("lt:sttProvider") as STTProvider | null;
       const tp = localStorage.getItem("lt:translateProvider") as TranslateProvider | null;
       if (s) setSourceLang(s);
-      if (t) setTargetLangs(JSON.parse(t));
+      if (t) {
+        try {
+          const parsed: unknown = JSON.parse(t);
+          // Validate shape: corrupted storage (không phải array-of-string) trước
+          // đây đưa state về giá trị rác → UI render/keys sai.
+          if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string") && parsed.length > 0) {
+            setTargetLangs(parsed as string[]);
+          }
+        } catch { /* corrupted value — dùng default */ }
+      }
       if (sp && ["deepgram","webspeech","free"].includes(sp)) setSttProvider(sp as STTProvider);
       if (tp && ["ai","mymemory"].includes(tp)) setTranslateProvider(tp);
       const prefs = localStorage.getItem("lt:prefs");

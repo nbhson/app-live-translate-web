@@ -16,6 +16,7 @@ export function createLiveSocket(opts: SocketOpts) {
   let ws: WebSocket | null = null;
   let hb: ReturnType<typeof setInterval> | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectAttempts = 0;
   let closedByUser = false;
 
   const listeners = new Map<string, Set<(data:any)=>void>>();
@@ -40,6 +41,7 @@ export function createLiveSocket(opts: SocketOpts) {
     ws = new WebSocket(url);
     ws.binaryType="arraybuffer";
     ws.onopen = () => {
+      reconnectAttempts = 0; // kết nối thành công — reset backoff
       trigger("open",{});
       emit("join",{ sourceLang: opts.sourceLang, targetLangs: opts.targetLangs, sttProvider: opts.sttProvider ?? "deepgram", translateProvider: opts.translateProvider ?? "ai" });
       if(hb) clearInterval(hb);
@@ -56,7 +58,11 @@ export function createLiveSocket(opts: SocketOpts) {
       if(hb) { clearInterval(hb); hb=null; }
       trigger("close",{});
       if(!closedByUser){
-        reconnectTimer=setTimeout(connect, 1500);
+        // Exponential backoff + jitter, cap 15s — fixed 1500ms trước đây biến
+        // server down thành reconnect-storm (client tự DDoS server của mình).
+        const delay = Math.min(1500 * Math.pow(2, reconnectAttempts), 15000);
+        reconnectAttempts += 1;
+        reconnectTimer=setTimeout(connect, delay + Math.floor(Math.random() * 400));
       }
     };
     ws.onerror = (e)=> trigger("error",e);

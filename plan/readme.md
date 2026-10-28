@@ -33,12 +33,38 @@
 - **Extension sidepanel duplicate code**: repo con của extension riêng (app-live-translate-extension) — fix ở repo đó.
 - **Summary streaming block WS loop**: cần đổi kiến thức session loop; cấu trúc hiện tại 1 client/session nên impact thấp.
 
+## Round 2 (2026-10-29) — Enterprise upgrade
+
+Objective: deep review (architecture, duplication, security, a11y, perf, bugs), a consistent
+design system + dark/light theming, and 4 new features (shareable session rooms, session
+stats dashboard, transcript export upgrades, centralized settings persistence with
+language-pair presets).
+
+### Kết quả Review đợt 2
+
+| # | Severity | Vị trí | Vấn đề | Fix |
+|---|----------|--------|--------|-----|
+| R2-1 | MAJOR | web/hooks/useLiveCaption.ts:48-49 | **Build hỏng từ đợt 1**: `next build` prerender `/` crash `window is not defined` — fix #14 derive `wss:` dùng `window.location.hostname` NGOÀI nhánh `typeof window` guard | SSR-safe: chỉ đọc `window` khi `typeof window !== "undefined"` |
+| R2-2 | MAJOR | web/hooks/useLiveCaption.ts:174-241 | Duplication ~40 dòng: webspeech onInterim/onFinal callbacks lặp y hệt cho mic & tab path; saveTranscript seq dùng `finalsRef.current.length` (stale trong batch) | Extract `pushFinal()` + 1 callback factory; seq đếm bằng ref |
+| R2-3 | MINOR | web (5 files) | Settings persistence rải rác: `lt:sourceLang/targetLangs/providers` (hook), `lt:prefs` (page, JSON.parse KHÔNG validate), `lt:iframe:*` (player), `lt:sttProvider` (selector) | `lib/settings.ts` — single source of truth, validate mọi field, typed getters/setters |
+| R2-4 | MINOR | web/app/page.tsx:64-73 | Export SRT/VTT dùng timestamp GIẢ (`Date.now() + i*1000`) cho seq-mapped sentences → cue sai hoàn toàn so với thời điểm nói | Hook track `sentencesTs[seq]` (ts thật của final sinh ra câu) |
+| R2-5 | MINOR | web/hooks/useLiveCaption.ts | `finals`/`sentences`/`translations` mọc vô hạn client-side (session dài → render chậm, RAM) | Cap 2000 segment (mirror server deque) |
+| R2-6 | MINOR | web components | A11y: nút icon-only (⛶ ↗ ✕) không aria-label; tabs thiếu `role=tablist/aria-selected`; caption không `aria-live` | Bổ sung ARIA + focus-visible |
+| R2-7 | MINOR | toàn bộ web UI | Không có design system: `bg-zinc-950/900/800` + border lặp thủ công ở 9 files; 2 chuỗi tiếng Việt sót trong UI English ("Không thể kết nối server", "Tab (kể cả iframe)"); không light mode | Tailwind semantic tokens (CSS vars) + component classes (`.btn/.card/.input/.badge/.tab`) + theme toggle dark/light, persist |
+| R2-8 | MINOR | server/main.py:379 | `summary:request` nhận transcript client KHÔNG giới hạn độ dài (payload khổng lồ → LLM cost) | Cap 50k chars |
+| R2-9 | MINOR | web/components/CaptionOverlay.tsx:27 | `JSON.stringify(translations)` trong deps effect — O(n) mỗi render | So sánh bằng ref count |
+| R2-10 | MINOR | web/lib/store.ts | Zustand store gần như dead code (page dùng state cục bộ) | Giữ (tests phụ thuộc), ghi nhận tech-debt |
+
+### Planned changes
+
+- Fix R2-1…R2-9; không đụng fix Round 1 (sandbox iframe, backoff, deque, double-handling).
+- Features: (1) **Shareable session rooms** `?room=` — join payload đã hỗ trợ `roomId` ở server, web chưa gửi; thêm room input + copy link. (2) **Session stats tab** (words, sentences, WPM, duration, per-language counts). (3) **Export TXT/Markdown + copy transcript**. (4) **Settings persistence tập trung** + **language-pair presets** + **theme toggle**.
+- Design system: tokens + component classes, áp cho page + mọi component.
+
 ## Trạng thái
 
-- [x] Plan
-- [x] Fix #1–#8, #11–#17
-- [x] Web: vitest **24/24 pass**, `tsc --noEmit` clean; Server: pytest 73/83 (10 fail **pre-existing env**: Python 3.14 + httpx mock assert — fail cả trên HEAD sạch, đã verify bằng stash)
-- [x] Commit + self-review
+- [x] Round 1: Plan; Fix #1–#8, #11–#17; vitest 24/24, tsc clean; pytest 73/83 (10 fail pre-existing env Python 3.14)
+- [ ] Round 2: plan → implement → verify → commit (đang chạy)
 
 ## Review Log
 

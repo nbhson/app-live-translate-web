@@ -44,9 +44,13 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
   const audioSource = opts.audioSource ?? "mic";
 
   // WS URL mặc định derive theo page protocol: hardcode `ws://` gãy khi deploy
-  // HTTPS (mixed content bị browser chặn luôn).
-  const wsUrl = process.env.NEXT_PUBLIC_WS_URL
-    ?? (typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:") + `//${window.location.hostname}:8000`;
+  // HTTPS (mixed content bị browser chặn luôn). Phải SSR-safe: prerender của
+  // Next không có `window` — đọc bừa là crash cả build (R2-1).
+  const wsUrl =
+    process.env.NEXT_PUBLIC_WS_URL ??
+    (typeof window !== "undefined"
+      ? (window.location.protocol === "https:" ? "wss:" : "ws:") + `//${window.location.hostname}:8000`
+      : "ws://localhost:8000");
   const url = wsUrl + "/ws";
 
   const handleServerEvent = useCallback((ev: ServerEvent & Record<string,any>) => {

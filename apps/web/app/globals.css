@@ -2,4 +2,92 @@
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-zinc-950 text-zinc-100 antialiased; }
+/* ---------------------------------------------------------------------------
+   Design tokens (R2-7). Light values in :root, dark overrides in .dark.
+   <html> ships with class "dark" by default; ThemeToggle flips + persists.
+   Tailwind colors app/surface/raise/hover/line/lineStrong/ink/dim/faint map
+   to these, so every component gets both themes for free.
+--------------------------------------------------------------------------- */
+:root {
+  --c-app: 250 250 250;          /* page background */
+  --c-surface: 255 255 255;      /* cards / panels */
+  --c-raise: 244 244 245;        /* raised controls (inputs on cards) */
+  --c-hover: 228 228 231;        /* hover state */
+  --c-line: 228 228 231;         /* borders */
+  --c-line-strong: 212 212 216;
+  --c-ink: 24 24 27;             /* primary text */
+  --c-dim: 82 82 91;             /* secondary text */
+  --c-faint: 161 161 170;        /* hints */
+  --c-caption: 24 24 27;         /* caption text */
+}
+
+.dark {
+  --c-app: 9 9 11;
+  --c-surface: 24 24 27;
+  --c-raise: 39 39 42;
+  --c-hover: 52 52 60;
+  --c-line: 39 39 42;
+  --c-line-strong: 63 63 70;
+  --c-ink: 244 244 245;
+  --c-dim: 161 161 170;
+  --c-faint: 113 113 122;
+  --c-caption: 255 255 255;
+}
+
+body {
+  @apply bg-app text-ink antialiased;
+}
+
+@layer components {
+  /* Buttons — one hierarchy everywhere */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm
+           font-medium transition select-none
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/70
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary { @apply btn bg-ink text-app hover:opacity-85; }
+  .btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700; }
+  .btn-ghost { @apply btn border border-line bg-surface text-ink hover:bg-hover; }
+  .btn-sm { @apply px-3 py-1.5 text-xs; }
+  .icon-btn { @apply btn-ghost !px-2.5 !py-2 leading-none; }
+
+  /* Surfaces */
+  .card { @apply rounded-xl border border-line bg-surface; }
+  .card-header { @apply flex items-center justify-between px-4 py-3 border-b border-line; }
+
+  /* Forms */
+  .label { @apply text-[11px] font-medium tracking-wider uppercase text-dim; }
+  .hint { @apply text-[11px] leading-tight text-faint min-h-[28px]; }
+  .input, .select {
+    @apply h-9 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink
+           placeholder:text-faint
+           focus:outline-none focus:border-line-strong focus:ring-1 focus:ring-lineStrong;
+  }
+  .input-lg { @apply input h-auto rounded-lg bg-raise py-2.5 pl-9 pr-3; }
+
+  /* Badges / pills */
+  .badge { @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]; }
+  .badge-green { @apply border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400; }
+  .badge-red { @apply border-red-500/20 bg-red-500/10 text-red-500 dark:text-red-400; }
+  .badge-chip { @apply rounded-full border border-line bg-surface text-dim hover:bg-hover transition; }
+
+  /* Tabs */
+  .tab { @apply rounded-lg px-3 lg:px-4 py-1.5 text-xs lg:text-sm font-medium transition
+                text-dim hover:text-ink hover:bg-hover; }
+  .tab-active { @apply bg-ink text-app shadow; }
+  .tab-count { @apply text-[10px] rounded-full px-1.5 py-0.5; }
+
+  /* Transcript rows (shared by overlay + history) */
+  .seg-source { @apply leading-relaxed break-words text-ink; }
+  .seg-translation { @apply text-[13px] leading-relaxed break-words; }
+
+  /* Icon-only buttons keep an accessible name but hide the visual text */
+  .sr-only:not(:focus):not(:active) {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+}
+
+/* Keyboard focus ring visible in both themes */
+:focus-visible { outline: 2px solid rgb(var(--c-ink) / 0.6); outline-offset: 1px; }

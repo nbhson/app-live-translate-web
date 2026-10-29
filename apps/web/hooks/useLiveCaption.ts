@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createLiveSocket } from "../lib/socket";
 import { saveTranscript } from "../lib/db";
+import { saveSetting } from "../lib/settings";
 
 type ServerEvent =
   | { type: "stt:interim"; transcript: string; language: string; confidence: number }
@@ -17,10 +18,23 @@ type ServerEvent =
 import type { STTProvider } from "../components/STTProviderSelector";
 import type { TranslateProvider } from "../components/TranslateProviderSelector";
 
-export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]; sttProvider?: STTProvider; translateProvider?: TranslateProvider; audioSource?: "mic" | "tab" }) {
+// Mirror server-side deque(maxlen=2000): session dài không được phình RAM/render.
+const MAX_FINALS = 2000;
+
+export type FinalSeg = { text: string; language: string; ts: number };
+
+export function useLiveCaption(opts: {
+  sourceLang: string;
+  targetLangs: string[];
+  sttProvider?: STTProvider;
+  translateProvider?: TranslateProvider;
+  audioSource?: "mic" | "tab";
+  roomId?: string;
+}) {
   const [interim, setInterim] = useState("");
-  const [finals, setFinals] = useState<{ text: string; language: string; ts: number }[]>([]);
+  const [finals, setFinals] = useState<FinalSeg[]>([]);
   const [sentences, setSentences] = useState<string[]>([]); // seq -> source sentence (for correct mapping even when AI slow/out-of-order)
+  const [sentenceTs, setSentenceTs] = useState<number[]>([]); // seq -> wall-clock ts of the final that produced it (SRT cue)
   const [translations, setTranslations] = useState<Record<string, string[]>>({});
   const [detectedLang, setDetectedLang] = useState<string>();
   const [confidence, setConfidence] = useState<number>();
@@ -37,6 +51,7 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
   const socketRef = useRef<ReturnType<typeof createLiveSocket> | null>(null);
   const finalsRef = useRef(finals);
   finalsRef.current = finals;
+  const seqRef = useRef(0); // monoton tăng độc lập với render batch — saveTranscript seq không còn stale
   const optsRef = useRef(opts);
   optsRef.current = opts;
   const sttProvider = opts.sttProvider ?? "deepgram";
@@ -62,10 +77,21 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
         break;
       case "stt:final": {
         setInterim("");
+        // Server seq là nguồn chân thật; fallback tăng cục bộ. seqRef luôn được
+        // đẩy tối thiểu lên seq+1 để saveTranscript không ghi đè seq cũ (WIP bug).
+        const seq = typeof ev.seq === "number" ? ev.seq : seqRef.current++;
+        if (seq + 1 > seqRef.current) seqRef.current = seq + 1;
         const seg = { text: ev.transcript, language: ev.language, ts: Date.now() };
-        setFinals((prev) => [...prev, seg]);
+        setFinals((prev) => [...prev.slice(-(MAX_FINALS - 1)), seg]); // R2-5: cap 2000 như server deque
+        // ts thật cho export SRT/VTT: record ts theo seq (R2-4)
+        setSentenceTs((prev) => {
+          const next = [...prev];
+          while (next.length <= seq) next.push(0);
+          next[seq] = seg.ts;
+          return next;
+        });
         // persist to IndexedDB per ARCHITECTURE.md persistence MVP
-        saveTranscript({ sessionId: "default", seq: finalsRef.current.length, text: ev.transcript, language: ev.language, translations: {}, ts: seg.ts });
+        saveTranscript({ sessionId: "default", seq, text: ev.transcript, language: ev.language, translations: {}, ts: seg.ts });
         break;
       }
       case "translate:final": {
@@ -144,17 +170,17 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
       }
       case "error":
         setError(ev.message);
-        if (ev.code) setSummaryLoading(false);
+        setSummaryLoading(false);
         break;
     }
   }, []);
 
   useEffect(() => {
-    const sock = createLiveSocket({ url, sourceLang: optsRef.current.sourceLang, targetLangs: optsRef.current.targetLangs, sttProvider: (optsRef.current.sttProvider ?? "deepgram") as any, translateProvider: (optsRef.current.translateProvider ?? "ai") as any });
+    const sock = createLiveSocket({ url, sourceLang: optsRef.current.sourceLang, targetLangs: optsRef.current.targetLangs, sttProvider: (optsRef.current.sttProvider ?? "deepgram") as any, translateProvider: (optsRef.current.translateProvider ?? "ai") as any, roomId: optsRef.current.roomId });
     socketRef.current = sock;
     const unsubOpen = sock.on("open", () => { setIsConnected(true); setError(undefined); });
     const unsubClose = sock.on("close", () => setIsConnected(false));
-    const unsubErr = sock.on("error", () => setError("Không thể kết nối server"));
+    const unsubErr = sock.on("error", () => setError("Cannot reach server — reconnecting…"));
     const unsubAll = sock.on("*", (data:any)=> {
       if (data?.type) handleServerEvent(data as ServerEvent);
     });
@@ -168,11 +194,32 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
     };
   }, [url, handleServerEvent]);
 
-  // Emit settings:update khi đổi ngôn ngữ/provider + persist localStorage per Phase 2
+  // Persist ngôn ngữ/provider qua lib/settings.ts (R2-3) + emit settings:update
   useEffect(() => {
     socketRef.current?.updateSettings(opts.sourceLang, opts.targetLangs, { translateProvider, sttProvider });
-    try { localStorage.setItem("lt:sourceLang", opts.sourceLang); localStorage.setItem("lt:targetLangs", JSON.stringify(opts.targetLangs)); localStorage.setItem("lt:translateProvider", translateProvider); } catch {}
+    saveSetting("sourceLang", opts.sourceLang);
+    saveSetting("targetLangs", opts.targetLangs);
+    saveSetting("translateProvider", translateProvider);
   }, [opts.sourceLang, opts.targetLangs.join(","), translateProvider, sttProvider]);
+
+  // ---- shared helpers -----------------------------------------------------
+  // Webspeech mic & tab path dùng y hệt callback (R2-2: ~40 dòng trùng lặp)
+  const pushFinal = useCallback((text: string, lang: string) => {
+    setInterim("");
+    const seg = { text, language: lang, ts: Date.now() };
+    setFinals((prev) => [...prev.slice(-(MAX_FINALS - 1)), seg]);
+    saveTranscript({ sessionId: "default", seq: seqRef.current++, text, language: lang, translations: {}, ts: seg.ts });
+    socketRef.current?.emit("translate:request", { text, sourceLang: optsRef.current.sourceLang, targetLangs: optsRef.current.targetLangs });
+  }, []);
+  const makeWebSpeechHandlers = useCallback(() => ({
+    onInterim: (text: string, lang: string) => {
+      setInterim(text);
+      setDetectedLang(lang);
+      setConfidence(0.95);
+    },
+    onFinal: pushFinal,
+    onError: (msg: string) => setError(msg),
+  }), [pushFinal]);
 
   const startCapture = useCallback(async () => {
     if (sttProvider === "webspeech") {
@@ -189,7 +236,6 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
         const isExtension = !!(window as any).chrome?.runtime?.id && window.location.protocol === "chrome-extension:";
         if (!isExtension) {
           // fallback: bắt tab qua getDisplayMedia PCM -> server STT (không dùng Web Speech track)
-          setError(undefined);
           const { startCapture: startAudio } = await import("../audio/capture");
           startAudio((buf: ArrayBuffer) => {
             socketRef.current?.sendBinary(buf);
@@ -199,48 +245,17 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
           });
           return;
         }
-        let track: MediaStreamTrack | null = null;
-        track = await captureTabAudioForWebSpeech();
+        const track = await captureTabAudioForWebSpeech();
         if (!track) {
-          setError("Không lấy được tab audio. Hãy chọn This Tab + Share audio ở picker, hoặc chuyển về Mic.");
+          setError("Could not capture tab audio. Pick 'This Tab' + Share audio in the picker, or switch to Microphone.");
           setIsCapturing(false);
           return;
         }
-        const cbs = {
-          onInterim: (text: string, lang: string) => {
-            setInterim(text);
-            setDetectedLang(lang);
-            setConfidence(0.95);
-          },
-          onFinal: (text: string, lang: string) => {
-            setInterim("");
-            const seg = { text, language: lang, ts: Date.now() };
-            setFinals((prev) => [...prev, seg]);
-            saveTranscript({ sessionId: "default", seq: finalsRef.current.length, text, language: lang, translations: {}, ts: seg.ts });
-            socketRef.current?.emit("translate:request", { text, sourceLang: optsRef.current.sourceLang, targetLangs: optsRef.current.targetLangs });
-          },
-          onError: (msg: string) => setError(msg),
-        };
-        startWebSpeech(optsRef.current.sourceLang, cbs, { track });
+        startWebSpeech(optsRef.current.sourceLang, makeWebSpeechHandlers(), { track });
         return;
       }
       // mic
-      const cbs = {
-        onInterim: (text: string, lang: string) => {
-          setInterim(text);
-          setDetectedLang(lang);
-          setConfidence(0.95);
-        },
-        onFinal: (text: string, lang: string) => {
-          setInterim("");
-          const seg = { text, language: lang, ts: Date.now() };
-          setFinals((prev) => [...prev, seg]);
-          saveTranscript({ sessionId: "default", seq: finalsRef.current.length, text, language: lang, translations: {}, ts: seg.ts });
-          socketRef.current?.emit("translate:request", { text, sourceLang: optsRef.current.sourceLang, targetLangs: optsRef.current.targetLangs });
-        },
-        onError: (msg: string) => setError(msg),
-      };
-      startWebSpeech(optsRef.current.sourceLang, cbs);
+      startWebSpeech(optsRef.current.sourceLang, makeWebSpeechHandlers());
       return;
     }
     const { startCapture: startAudio } = await import("../audio/capture");
@@ -252,7 +267,7 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
       setIsCapturing(false);
       setError(e.message ?? String(e));
     });
-  }, [sttProvider, audioSource]);
+  }, [sttProvider, audioSource, makeWebSpeechHandlers]);
 
   const stopCapture = useCallback(() => {
     if (sttProvider === "webspeech") {
@@ -270,10 +285,12 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
     setInterim("");
     setFinals([]);
     setSentences([]);
+    setSentenceTs([]);
     setTranslations({});
     setSummary(null);
     setChapters([]); setActionItems([]); setKeywords([]);
     setSuggestions([]);
+    seqRef.current = 0;
   }, []);
 
   const requestSummary = useCallback((mode: "30s"|"full" = "full") => {
@@ -288,6 +305,7 @@ export function useLiveCaption(opts: { sourceLang: string; targetLangs: string[]
     interim,
     finals,
     sentences,
+    sentenceTs,
     translations,
     detectedLang,
     confidence,

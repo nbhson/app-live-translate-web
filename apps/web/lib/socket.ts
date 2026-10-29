@@ -9,6 +9,8 @@ export type SocketOpts = {
   targetLangs: string[];
   sttProvider?: string;
   translateProvider?: string;
+  /** Room id for shared sessions (?room= links). Server broadcasts to everyone in the room. */
+  roomId?: string;
 };
 
 export function createLiveSocket(opts: SocketOpts) {
@@ -43,7 +45,7 @@ export function createLiveSocket(opts: SocketOpts) {
     ws.onopen = () => {
       reconnectAttempts = 0; // kết nối thành công — reset backoff
       trigger("open",{});
-      emit("join",{ sourceLang: opts.sourceLang, targetLangs: opts.targetLangs, sttProvider: opts.sttProvider ?? "deepgram", translateProvider: opts.translateProvider ?? "ai" });
+      emit("join",{ sourceLang: opts.sourceLang, targetLangs: opts.targetLangs, sttProvider: opts.sttProvider ?? "deepgram", translateProvider: opts.translateProvider ?? "ai", roomId: opts.roomId ?? "default" });
       if(hb) clearInterval(hb);
       hb=setInterval(()=> emit("ping",{}), 25000);
     };

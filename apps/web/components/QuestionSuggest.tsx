@@ -40,7 +40,7 @@ export function QuestionSuggest({ items, onClear }: { items: SuggestItem[]; onCl
 
       {/* question selector if multiple */}
       {items.length > 1 && (
-        <div className="flex gap-1.5 px-4 py-2 overflow-x-auto border-b border-zinc-800/50 shrink-0">
+        <div className="flex gap-1.5 px-4 py-2 overflow-x-auto border-b border-line/50 shrink-0">
           {items.slice(-6).map((it, idx) => {
             const realIdx = items.length - Math.min(6, items.length) + idx;
             return (

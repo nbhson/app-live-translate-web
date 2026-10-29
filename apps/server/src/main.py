@@ -377,6 +377,10 @@ async def websocket_endpoint(ws: WebSocket):
                 elif t == "summary:request":
                     window = msg.get("window", "full")
                     transcript = msg.get("transcript") or " ".join(session.transcripts[-50:])
+                    # R2-8: client payload không giới hạn → transcript khổng lồ
+                    # đánh thẳng vào LLM (cost/latency). Cap 50k chars (~2h speech).
+                    if len(transcript) > 50_000:
+                        transcript = transcript[-50_000:]
                     # stream summarizer
                     try:
                         # emit streaming chunks

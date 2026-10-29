@@ -64,7 +64,47 @@ language-pair presets).
 ## Trạng thái
 
 - [x] Round 1: Plan; Fix #1–#8, #11–#17; vitest 24/24, tsc clean; pytest 73/83 (10 fail pre-existing env Python 3.14)
-- [ ] Round 2: plan → implement → verify → commit (đang chạy)
+- [x] Round 2: plan → implement → verify → commit (hoàn tất 2026-10-29)
+
+## Round 2 — Kết quả thực hiện (2026-10-29)
+
+### Phiên bị gián đoạn (WIP recovery)
+
+Round 2 đã bắt đầu ở session trước nhưng bị interrupt giữa chừng, để lại 5 file
+modified + 2 file mới **chưa commit và không build được** (duplicate import
+`saveSetting`, biến `MAX_SEGMENTS` không tồn tại, khối `colors` tailwind bị
+thiếu wrapper, `seqRef` stale). Đã review + sửa + commit lại thành
+`c0bb728 fix(web): complete interrupted round-2 WIP`.
+
+### Implemented
+
+| # | Commit | Nội dung |
+|---|--------|----------|
+| 1 | `c0bb728` | Complete interrupted WIP: hook fixes (MAX_FINALS cap, monotonic seqRef), settings.ts/stats.ts/socket roomId, design tokens CSS+tailwind, srt exporters |
+| 2 | `ad339bc` | Design system áp dụng toàn UI (semantic tokens, .btn/.card/.input/.badge/.tab), ThemeToggle dark/light + no-FOUC bootstrap, a11y (role=tablist, aria-selected, aria-live, aria-label icon buttons, role=alert), fix R2-9 |
+| 3 | (tiếp) | Export features (R2-4: SRT/VTT dùng ts thật + alignment translations theo seq; TXT/MD/copy transcript), stats tab (StatsPanel + computeStats), shareable rooms (?room= + copy link), presets ngôn ngữ, settings tập trung qua loadSettings/saveSetting (bỏ lt:prefs raw) |
+| 4 | (commit) | tests: settings/stats/export (25 test mới → web 49/49), server: cap 50k chars summary payload (R2-8) |
+
+### Verify
+
+- `pnpm typecheck` (web): clean; `vitest`: **49/49 passed** (7 files); shared: **28/28**.
+- `next build`: ✓ (prerender 5/5, không còn crash `window is not defined`).
+- pytest (Python 3.14 system): 10 failed / 73 passed — **same count as Round-1 baseline** (pre-existing env failures: `cgi` removed, httpx).
+- Turbo build: web + shared build OK.
+
+### Review Log Round 2
+
+- WIP recovery: phát hiện 4 bug trong WIP (dup import, MAX_SEGMENTS undefined
+  gây crash runtime, tailwind `colors` thiếu wrapper làm mất token
+  app/surface/raise/hover/line, saveTranscript seq stale khi server seq có mặt)
+  — sửa hết trước khi commit.
+- Test tự viết: 4 fail đầu là expectation sai của chính test (translations map
+  theo seq gốc, "\n\n" join, ts=0 hợp lệ) — sửa test, không sửa code cho khớp
+  expectation sai.
+- CSS build fail: `focus:border-line-strong` (camelCase key `lineStrong` phải
+  viết `border-lineStrong`) — đã sửa, build pass.
+- Custom `.sr-only:not(:focus)` trong globals.css bị utilities layer của
+  Tailwind override vô dụng → bỏ, dùng aria-label thật trên icon buttons.
 
 ## Review Log
 

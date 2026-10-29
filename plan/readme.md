@@ -81,9 +81,10 @@ thiếu wrapper, `seqRef` stale). Đã review + sửa + commit lại thành
 | # | Commit | Nội dung |
 |---|--------|----------|
 | 1 | `c0bb728` | Complete interrupted WIP: hook fixes (MAX_FINALS cap, monotonic seqRef), settings.ts/stats.ts/socket roomId, design tokens CSS+tailwind, srt exporters |
-| 2 | `ad339bc` | Design system áp dụng toàn UI (semantic tokens, .btn/.card/.input/.badge/.tab), ThemeToggle dark/light + no-FOUC bootstrap, a11y (role=tablist, aria-selected, aria-live, aria-label icon buttons, role=alert), fix R2-9 |
-| 3 | (tiếp) | Export features (R2-4: SRT/VTT dùng ts thật + alignment translations theo seq; TXT/MD/copy transcript), stats tab (StatsPanel + computeStats), shareable rooms (?room= + copy link), presets ngôn ngữ, settings tập trung qua loadSettings/saveSetting (bỏ lt:prefs raw) |
-| 4 | (commit) | tests: settings/stats/export (25 test mới → web 49/49), server: cap 50k chars summary payload (R2-8) |
+| 2 | `ad339bc` | Design system áp dụng toàn UI (semantic tokens, .btn/.card/.input/.badge/.tab), ThemeToggle dark/light + no-FOUC bootstrap, a11y (role=tablist, aria-selected, aria-live, aria-label icon buttons, role=alert), fix R2-9; features: export ts thật (R2-4) + TXT/MD/copy, stats tab, shareable rooms ?room=, presets ngôn ngữ, settings tập trung (bỏ lt:prefs raw) |
+| 3 | `b4ba2cf` | tests settings/stats/export (25 test mới → web 49/49), server cap 50k chars summary payload (R2-8), docs |
+| 4 | `defce0b` | Untrack tsbuildinfo artifacts (Round-1 #17 còn sót) + fix gitignore glob |
+| 5 | `f1bc1d6` | Self-review: thay nốt class zinc cứng cuối cùng (Controls, QuestionSuggest) |
 
 ### Verify
 

@@ -18,36 +18,32 @@ export function SummaryPanel({
   onCopy?: () => void;
 }) {
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 h-full flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between p-4 pb-3 border-b border-zinc-800 shrink-0">
-        <h3 className="font-medium">AI Summary (Phase 3)</h3>
+    <div className="card h-full flex flex-col overflow-hidden">
+      <div className="card-header shrink-0">
+        <h3 className="text-sm font-medium">AI Summary</h3>
         <div className="flex gap-2">
-          <button
-            onClick={onRequestSummary}
-            disabled={isLoading}
-            className="text-xs bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded hover:bg-zinc-700 disabled:opacity-50"
-          >
+          <button onClick={onRequestSummary} disabled={isLoading} className="btn-ghost btn-sm">
             {isLoading ? "Summarizing..." : "Summarize"}
           </button>
-          {summary && onCopy && <button onClick={onCopy} className="text-xs border border-zinc-700 px-2 py-1 rounded">Copy</button>}
+          {summary && onCopy && <button onClick={onCopy} className="btn-ghost btn-sm">Copy</button>}
         </div>
       </div>
-      <div className="text-sm whitespace-pre-wrap leading-relaxed flex-1 overflow-auto p-4 scroll-smooth">
-        {summary ? <div className="text-zinc-200">{summary}</div> : <div className="text-zinc-500">No summary yet. Press Summarize after transcript is available (buffer 30s-5m, streaming).</div>}
+      <div className="text-sm whitespace-pre-wrap leading-relaxed flex-1 overflow-auto p-4 scroll-smooth" aria-live="polite">
+        {summary ? <div className="text-ink">{summary}</div> : <div className="text-faint">No summary yet. Press Summarize after transcript is available (buffer 30s-5m, streaming).</div>}
         {chapters && chapters.length>0 && (
           <div className="mt-3">
-            <div className="text-xs text-zinc-400 mb-1">Chapters</div>
-            <ul className="list-disc pl-4 text-zinc-300">{chapters.map((c,i)=><li key={i}>{c.title} <span className="text-zinc-500">@{Math.floor(c.start_ms/1000)}s</span></li>)}</ul>
+            <div className="label mb-1">Chapters</div>
+            <ul className="list-disc pl-4 text-dim">{chapters.map((c,i)=><li key={i}>{c.title} <span className="text-faint">@{Math.floor(c.start_ms/1000)}s</span></li>)}</ul>
           </div>
         )}
         {actionItems && actionItems.length>0 && (
           <div className="mt-3">
-            <div className="text-xs text-zinc-400 mb-1">Action Items</div>
-            <ul className="list-disc pl-4 text-amber-200">{actionItems.map((a,i)=><li key={i}>{a}</li>)}</ul>
+            <div className="label mb-1">Action Items</div>
+            <ul className="list-disc pl-4 text-amber-600 dark:text-amber-300">{actionItems.map((a,i)=><li key={i}>{a}</li>)}</ul>
           </div>
         )}
         {keywords && keywords.length>0 && (
-          <div className="mt-3 flex flex-wrap gap-1">{keywords.map((k,i)=><span key={i} className="text-xs bg-zinc-800 px-2 py-1 rounded">{k}</span>)}</div>
+          <div className="mt-3 flex flex-wrap gap-1">{keywords.map((k,i)=><span key={i} className="badge badge-chip">{k}</span>)}</div>
         )}
       </div>
     </div>

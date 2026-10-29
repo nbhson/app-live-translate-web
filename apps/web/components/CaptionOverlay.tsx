@@ -13,77 +13,76 @@ type Props = {
   targetLangs?: string[];
 };
 
+const LANG_COLOR: Record<string, string> = {
+  vi: "text-amber-500 dark:text-amber-300",
+  en: "text-sky-600 dark:text-sky-300",
+};
+
+function TranslationLines({ translations, idx }: { translations: Record<string, string[]>; idx: number }) {
+  return (
+    <>
+      {Object.entries(translations).map(([lang, arr]) => {
+        const t = arr[idx];
+        if (!t) return <div key={lang} className="text-[0.85em] text-faint italic">[{lang}] … translating</div>;
+        return (
+          <div key={lang} className={`${LANG_COLOR[lang] ?? "text-emerald-600 dark:text-emerald-300"} text-[0.9em] leading-relaxed`}>
+            {t}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function CaptionOverlay({ interim, finals, sentences, translations, detectedLang, confidence, fontSize=18, opacity=0.95, targetLangs }: Props) {
   const seqs = (sentences ?? []).map((s, idx) => (s ? idx : -1)).filter((i) => i >= 0);
   const hasSentences = seqs.length > 0;
-  const lastFinal = hasSentences ? (seqs.length ? ({ text: sentences![seqs[seqs.length - 1]] } as any) : undefined) : finals[finals.length - 1];
+  const lastFinal = hasSentences ? sentences![seqs[seqs.length - 1]] : finals[finals.length - 1]?.text;
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // autoscroll bottom luôn khi có câu mới / interim / dịch về
+  // R2-9: JSON.stringify(translations) trong deps từng là O(n) mỗi render.
+  // Translations được update bất biến (mỗi token tạo object mới) nên bản thân
+  // reference đã đủ để autoscroll — không cần serialize.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [seqs.length, interim, JSON.stringify(translations)]);
+  }, [seqs.length, interim, translations]);
 
   return (
     <div
-      className="bg-zinc-950 rounded-xl border border-zinc-800 relative shadow-lg shadow-black/30 flex flex-col h-full overflow-hidden"
-      style={{
-        opacity,
-        fontSize: fontSize + "px",
-      }}
+      className="bg-app rounded-xl border border-line relative shadow-lg flex flex-col h-full overflow-hidden"
+      style={{ opacity, fontSize: fontSize + "px" }}
     >
-      <div ref={scrollRef} className="flex-1 overflow-auto p-5 scroll-smooth">
+      <div ref={scrollRef} className="flex-1 overflow-auto p-5 scroll-smooth" aria-live="polite" aria-label="Live captions">
         <div className="space-y-3">
           {hasSentences ? (
-            seqs.map((seq) => {
-              const s = sentences![seq];
-              return (
-                <div key={seq} className="space-y-1 border-l-2 border-zinc-700 pl-3 py-1">
-                  <div className="text-white leading-relaxed">{s}</div>
-                  {Object.entries(translations).map(([lang, arr]) => {
-                    const t = arr[seq];
-                    if (!t) return <div key={lang} className="text-[0.85em] text-zinc-500 italic">[{lang}] … translating</div>;
-                    const color = lang === "vi" ? "text-amber-300" : lang === "en" ? "text-sky-300" : "text-emerald-300";
-                    return (
-                      <div key={lang} className={`${color} text-[0.9em] leading-relaxed`}>
-                        {t}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })
+            seqs.map((seq) => (
+              <div key={seq} className="space-y-1 border-l-2 border-lineStrong pl-3 py-1">
+                <div className="text-caption leading-relaxed">{sentences![seq]}</div>
+                <TranslationLines translations={translations} idx={seq} />
+              </div>
+            ))
           ) : (
             finals.map((f, i) => (
-              <div key={i} className="space-y-1 border-l-2 border-zinc-800 pl-3 py-1">
-                <div className="text-white leading-relaxed">{f.text}</div>
-                {Object.entries(translations).map(([lang, arr]) => {
-                  const t = arr[i];
-                  if (!t) return <div key={lang} className="text-[0.85em] text-zinc-500 italic">[{lang}] …</div>;
-                  const color = lang === "vi" ? "text-amber-300" : lang === "en" ? "text-sky-300" : "text-emerald-300";
-                  return (
-                    <div key={lang} className={`${color} text-[0.9em]`}>
-                      {t}
-                    </div>
-                  );
-                })}
+              <div key={i} className="space-y-1 border-l-2 border-line pl-3 py-1">
+                <div className="text-caption leading-relaxed">{f.text}</div>
+                <TranslationLines translations={translations} idx={i} />
               </div>
             ))
           )}
           {interim && (
-            <div className="text-zinc-400 opacity-70 italic flex items-center gap-2 sticky bottom-0 bg-zinc-950/80 backdrop-blur py-2">
-              <span className="inline-block w-2 h-2 bg-zinc-400 rounded-full animate-pulse" /> {interim}
+            <div className="text-dim opacity-80 italic flex items-center gap-2 sticky bottom-0 bg-app/80 backdrop-blur py-2">
+              <span className="inline-block w-2 h-2 bg-dim rounded-full animate-pulse" /> {interim}
             </div>
           )}
           {!lastFinal && !interim && (
-            <div className="text-zinc-500 text-center py-12 text-base">Press Start to begin live caption</div>
+            <div className="text-faint text-center py-12 text-base">Press Start to begin live caption</div>
           )}
         </div>
       </div>
       {detectedLang && (
-        <div className="px-5 py-2 text-xs text-zinc-500 border-t border-zinc-800 bg-zinc-950">
+        <div className="px-5 py-2 text-xs text-faint border-t border-line bg-app">
           Listening: {detectedLang} {confidence ? `(${Math.round(confidence*100)}%)` : ""}
           {targetLangs && targetLangs.length>1 ? ` → ${targetLangs.join(", ")}` : ""}
         </div>

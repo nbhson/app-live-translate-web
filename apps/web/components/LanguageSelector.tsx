@@ -21,11 +21,12 @@ export function LanguageSelector({ sourceLang, targetLangs, onSourceChange, onTa
   return (
     <>
       <label className="flex flex-col gap-1.5 min-w-0">
-        <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400">Source caption</span>
+        <span className="label">Source caption</span>
         <select
           value={sourceLang}
           onChange={(e) => onSourceChange(e.target.value)}
-          className="h-9 bg-zinc-900 border border-zinc-700 rounded-lg px-3 text-sm w-full focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
+          className="select"
+          aria-label="Source caption language"
         >
           {SUPPORTED_SOURCE_LANGUAGES.map((l) => (
             <option key={l.code} value={l.code}>
@@ -33,11 +34,11 @@ export function LanguageSelector({ sourceLang, targetLangs, onSourceChange, onTa
             </option>
           ))}
         </select>
-        <span className="text-[11px] leading-tight text-zinc-500 min-h-[28px]">auto = Deepgram detect_language</span>
+        <span className="hint">auto = Deepgram detect_language</span>
       </label>
 
-      <div className="flex flex-col gap-1.5 min-w-0">
-        <span className="text-[11px] font-medium tracking-wider uppercase text-zinc-400">Translate to (1–3)</span>
+      <div className="flex flex-col gap-1.5 min-w-0" role="group" aria-label="Target languages">
+        <span className="label">Translate to (1–3)</span>
         <div className="flex flex-wrap gap-1.5 min-h-[36px] content-start">
           {SUPPORTED_TARGET_LANGUAGES.map((l) => {
             const active = targetLangs.includes(l.code);
@@ -45,7 +46,8 @@ export function LanguageSelector({ sourceLang, targetLangs, onSourceChange, onTa
               <button
                 key={l.code}
                 onClick={()=>toggleTarget(l.code)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition ${active ? "bg-amber-500 text-black border-amber-400 shadow" : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600"}`}
+                aria-pressed={active}
+                className={`badge badge-chip ${active ? "!bg-amber-500 !text-black !border-amber-400 shadow" : ""}`}
                 title={l.label}
               >
                 {l.nativeLabel} {active ? "✓" : ""}
@@ -53,7 +55,7 @@ export function LanguageSelector({ sourceLang, targetLangs, onSourceChange, onTa
             );
           })}
         </div>
-        <span className="text-[11px] leading-tight text-zinc-500 min-h-[28px]">Selected: {targetLangs.join(", ") || "(none)"} — saved to localStorage</span>
+        <span className="hint">Selected: {targetLangs.join(", ") || "(none)"} — saved automatically</span>
       </div>
     </>
   );

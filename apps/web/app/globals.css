@@ -62,7 +62,7 @@ body {
   .input, .select {
     @apply h-9 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink
            placeholder:text-faint
-           focus:outline-none focus:border-line-strong focus:ring-1 focus:ring-lineStrong;
+           focus:outline-none focus:border-lineStrong focus:ring-1 focus:ring-lineStrong;
   }
   .input-lg { @apply input h-auto rounded-lg bg-raise py-2.5 pl-9 pr-3; }
 
@@ -81,12 +81,6 @@ body {
   /* Transcript rows (shared by overlay + history) */
   .seg-source { @apply leading-relaxed break-words text-ink; }
   .seg-translation { @apply text-[13px] leading-relaxed break-words; }
-
-  /* Icon-only buttons keep an accessible name but hide the visual text */
-  .sr-only:not(:focus):not(:active) {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
-  }
 }
 
 /* Keyboard focus ring visible in both themes */

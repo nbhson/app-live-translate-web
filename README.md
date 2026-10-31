@@ -1,5 +1,7 @@
 # Live Translate — Live Caption EN + Live Translate VI
 
+[![CI](https://github.com/nbhson/app-live-translate-web/actions/workflows/ci.yml/badge.svg)](https://github.com/nbhson/app-live-translate-web/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Real-time web application that displays live English captions from any audio playing on your computer and translates them instantly into Vietnamese in parallel.
 
 ![Live Translate Demo](./image.png)

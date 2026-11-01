@@ -47,6 +47,28 @@ logger = logging.getLogger("lt-server")
 # rooms: roomId -> set(Session) để extension + web UI cùng nhận broadcast
 _rooms: dict[str, set["Session"]] = {}
 
+# 13.3: fire-and-forget task phải giữ ref — task không ref có thể bị GC giữa chừng
+# (PEP 489/asyncio docs) và exception của nó bị nuốt im lặng. Set ref + done
+# callback để log mọi exception thay vì mất tích.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def spawn_task(coro, *, name: str | None = None) -> asyncio.Task:
+    """create_task an toàn: giữ ref đến khi xong + log exception (không nuốt)."""
+    task = asyncio.create_task(coro, name=name)
+    _background_tasks.add(task)
+
+    def _done(t: asyncio.Task):
+        _background_tasks.discard(t)
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc is not None:
+            logger.error(f"[task] background task '{t.get_name()}' failed: {exc!r}")
+
+    task.add_done_callback(_done)
+    return task
+
 async def _broadcast(room_id: str, event: str, payload: dict):
     for sess in list(_rooms.get(room_id, set())):
         try:
@@ -134,11 +156,11 @@ class Session:
         async def _final(text, lang, is_eos, words):
             await self._emit_final(text, lang, is_eos, words)
 
-        self.stt.on_interim = lambda text, lang, conf: asyncio.create_task(
-            _interim(text, lang, conf)
+        self.stt.on_interim = lambda text, lang, conf: spawn_task(
+            _interim(text, lang, conf), name="stt-interim"
         )
-        self.stt.on_final = lambda text, lang, is_eos, words: asyncio.create_task(
-            _final(text, lang, is_eos, words)
+        self.stt.on_final = lambda text, lang, is_eos, words: spawn_task(
+            _final(text, lang, is_eos, words), name="stt-final"
         )
         self.buffer = SentenceBuffer(source_lang=self.source_lang, on_sentence=self._on_sentence)
         await self.stt.connect()
@@ -182,7 +204,7 @@ class Session:
         seq = self._sentence_seq
         self._sentence_seq += 1
         # question suggestion (async, not blocking translate)
-        asyncio.create_task(self._maybe_suggest(sentence, seq))
+        spawn_task(self._maybe_suggest(sentence, seq), name="suggest")
         # fan-out multi-target via gather per ARCHITECTURE.md
         async def _one(tl: str):
             # if LLM streaming, emit stream tokens with seq so client maps correctly
@@ -342,10 +364,10 @@ async def websocket_endpoint(ws: WebSocket):
                                     await session._emit_final(text, lang, is_eos, words)
 
                                 session.stt.on_interim = lambda text, lang, conf: (
-                                    asyncio.create_task(_i(text, lang, conf))
+                                    spawn_task(_i(text, lang, conf), name="stt-interim")
                                 )
                                 session.stt.on_final = lambda text, lang, is_eos, words: (
-                                    asyncio.create_task(_f(text, lang, is_eos, words))
+                                    spawn_task(_f(text, lang, is_eos, words), name="stt-final")
                                 )
                                 await session.stt.connect()
                             except Exception as e:
@@ -380,7 +402,7 @@ async def websocket_endpoint(ws: WebSocket):
                         await session.emit("stt:final", {"transcript": text, "language": s_lang, "words": [], "is_eos": True, "seq": seq})
                         # question suggest for webspeech path
                         if is_question(text):
-                            asyncio.create_task(session._maybe_suggest(text, seq))
+                            spawn_task(session._maybe_suggest(text, seq), name="suggest")
                         # fan-out dịch - mỗi targetLang chung seq
                         for tl in t_langs:
                             try:
@@ -396,24 +418,33 @@ async def websocket_endpoint(ws: WebSocket):
                     # đánh thẳng vào LLM (cost/latency). Cap 50k chars (~2h speech).
                     if len(transcript) > 50_000:
                         transcript = transcript[-50_000:]
-                    # stream summarizer
+                    # stream summarizer — stream THẬT qua summarize_stream (SSE từ
+                    # backend OpenAI-compatible khi có CUSTOM_*; fallback heuristic
+                    # chia nhỏ theo từ khi không có key / LLM lỗi).
                     try:
-                        # emit streaming chunks
-                        full = await summarizer.summarize(
+                        summary_text = ""
+                        final_result: dict | None = None
+                        async for chunk in summarizer.summarize_stream(
                             transcript, window=window if window in ("30s", "full") else "full"
-                        )
-                        # stream summary chunk by chunk
-                        summary_text = full.get("summary", "")
-                        for i in range(0, len(summary_text), 40):
-                            await session.emit("summary:chunk", {"token": summary_text[i : i + 40]})
-                            await asyncio.sleep(0.02)
+                        ):
+                            if isinstance(chunk, dict):
+                                final_result = chunk
+                            else:
+                                summary_text += chunk
+                                await session.emit("summary:chunk", {"token": chunk})
+                        final_result = final_result or {
+                            "summary": summary_text.strip(),
+                            "chapters": [],
+                            "actionItems": [],
+                            "keywords": [],
+                        }
                         await session.emit(
                             "summary:final",
                             {
-                                "summary": summary_text,
-                                "chapters": full.get("chapters", []),
-                                "actionItems": full.get("actionItems", []),
-                                "keywords": full.get("keywords", []),
+                                "summary": final_result.get("summary", summary_text.strip()),
+                                "chapters": final_result.get("chapters", []),
+                                "actionItems": final_result.get("actionItems", []),
+                                "keywords": final_result.get("keywords", []),
                             },
                         )
                     except Exception as e:

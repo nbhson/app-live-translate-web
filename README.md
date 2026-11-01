@@ -72,7 +72,14 @@ pnpm dev:web          # http://localhost:3000
 - `DEEPGRAM_API_KEY` (required if `STT_PROVIDER=deepgram` - get free trial at deepgram.com; use `webspeech` for free without a key)
 - `CUSTOM_API_KEY` + `CUSTOM_BASE_URL` + `CUSTOM_MODEL` (for AI translate/summary - OpenAI-compatible; falls back to `MyMemory FREE` if empty)
 - `TRANSLATE_PROVIDER=auto|ai|free` (auto = prefer CUSTOM if available, otherwise MyMemory)
+- `TRANSLATE_STREAM=1` (optional, turn on real streaming for AI translate)
 - `ALLOWED_ORIGINS` (optional, comma-separated list of origins allowed by the server's CORS policy, e.g. `https://app.example.com,https://admin.example.com`; unset = allow `*` for local dev — a warning is logged, set this before deploying to production)
+
+**Real streaming (translate + summary):**
+- AI translate/summary backend là OpenAI-compatible HTTP (`CUSTOM_*`), hỗ trợ SSE `stream: true` → server stream **thật** (`LLMTranslator.translate_stream`, `Summarizer.summarize_stream` parse SSE delta và emit từng token qua `translate:stream` / `summary:chunk`).
+- Translate streaming chỉ bật khi `TRANSLATE_STREAM=1`; summary luôn stream khi có key.
+- Fallback khi backend lỗi / không trả token: one-shot (translate) hoặc heuristic no-AI (summary), client vẫn nhận đủ kết quả — đây là degradation có chủ đích, không phải giả lập.
+- Chapters/actionItems/keywords của summary path stream được derive bằng heuristic (`_fallback`) vì LLM stream trả plain-text bullets (không JSON) để token hiển thị được ngay.
 
 **How to Use (iframe-first, recommended):**
 - **Iframe-centered:** Open `http://localhost:3000` -> `🌐` input paste URL (youtube.com, vimeo, mp4, meet...) -> `Load` -> large iframe 58-62vh occupying 65% of screen, toolbar with `⛶ Fullscreen`, `↗ New tab`, history & suggestions. Iframe has `allow="microphone; camera; display-capture; autoplay; fullscreen; clipboard-*"`.

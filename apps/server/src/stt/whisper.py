@@ -54,6 +54,22 @@ class WhisperStream:
         self._vad_thresh = float(os.environ.get("WHISPER_VAD_THRESH", "0.015"))
         self._lock = asyncio.Lock()
         self._last_interim = 0.0
+        # 13.3: giữ ref task nền (interim) để không bị GC giữa chừng + log exception
+        self._bg_tasks: set[asyncio.Task] = set()
+
+    def _spawn(self, coro) -> asyncio.Task:
+        task = asyncio.create_task(coro)
+
+        def _done(t: asyncio.Task):
+            self._bg_tasks.discard(t)
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc is not None:
+                logger.error(f"[whisper] background task failed: {exc!r}")
+
+        task.add_done_callback(_done)
+        return task
 
     async def connect(self):
         # warm up model in thread
@@ -92,7 +108,7 @@ class WhisperStream:
                 # copy small window for interim
                 inter_chunk = bytes(self._buf[-32000:])  # last 1s
                 if self._is_speech(inter_chunk):
-                    asyncio.create_task(self._try_interim(inter_chunk))
+                    self._spawn(self._try_interim(inter_chunk))
             # flush if buffer large
             if len(self._buf) >= 16000 * 2 * (self._chunk_ms / 1000) * 1.0:
                 await self._try_transcribe(force=False)
@@ -168,6 +184,9 @@ class WhisperStream:
                 self._flush_task.cancel()
             except Exception:
                 pass
+        # hủy các task interim đang treo để không đụng model/ws sau close
+        for t in list(self._bg_tasks):
+            t.cancel()
         # final flush
         if len(self._buf) > 8000:
             try:

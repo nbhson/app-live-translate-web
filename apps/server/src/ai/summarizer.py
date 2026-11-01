@@ -3,6 +3,7 @@ Runs parallel to translate, buffered 30s-5m, streams via ws events summary:chunk
 Chỉ dùng CUSTOM_API_KEY / CUSTOM_BASE_URL / CUSTOM_MODEL (OpenAI-compatible).
 """
 
+import json
 import os
 from collections.abc import AsyncIterator
 
@@ -18,6 +19,16 @@ Keep language same as transcript unless asked. If transcript is short (<2 senten
 Transcript:
 {transcript}
 Return JSON only. summary must be a single markdown string, not an array."""
+
+# Prompt cho đường stream thật: plain markdown bullets (KHÔNG JSON) để từng
+# token trả về hiển thị được ngay cho client. chapters/actionItems/keywords
+# cho path này được derive bằng heuristic ở _fallback() (xem summarize_stream).
+PROMPT_SUMMARY_STREAM = """You are a live meeting assistant. Summarize the transcript concisely - DO NOT just repeat the transcript.
+Produce 3-5 bullet points in markdown, each bullet is a distilled insight (e.g. "- point"), NOT verbatim sentences. Keep it short, capture main ideas, decisions, and conclusions.
+Keep language same as transcript unless asked. If transcript is short (<2 sentences), still summarize in 1-2 bullets.
+Transcript:
+{transcript}
+Return ONLY the markdown bullets, no JSON, no code fences."""
 
 
 class Summarizer:
@@ -57,13 +68,102 @@ class Summarizer:
             data["summary"] = str(s)
         return data
 
-    async def summarize_stream(self, transcript: str, window: str = "full") -> AsyncIterator[str]:
-        result = await self.summarize(transcript, window)
-        text = result.get("summary", "")
-        if isinstance(text, list):
-            text = "\n".join(text)
-        for w in text.split(" "):
-            yield w + " "
+    async def summarize_stream(self, transcript: str, window: str = "full") -> AsyncIterator[str | dict]:
+        """Stream THẬT từ backend OpenAI-compatible (SSE, `stream: true`).
+
+        Yield protocol:
+        - các `str` token của summary ngay khi LLM trả về (client render dần qua
+          event `summary:chunk`);
+        - cuối cùng yield MỘT `dict` kết quả đầy đủ
+          {summary, chapters, actionItems, keywords} — dùng cho event `summary:final`.
+
+        Fallback (degradation có chủ đích, KHÔNG phải giả lập khi backend hỗ trợ):
+        - Không có CUSTOM_API_KEY/CUSTOM_BASE_URL, hoặc LLM lỗi -> dùng summary
+          heuristic `_fallback()` (không có AI), chia nhỏ theo từ để client vẫn
+          thấy progress dần.
+        - LLM stream thành công nhưng chỉ trả plain-text bullets nên
+          chapters/actionItems/keywords của path stream được derive bằng cùng
+          heuristic `_fallback()` (trừ summary lấy từ LLM).
+        """
+        if not transcript.strip():
+            result = {
+                "summary": "Chưa có transcript đủ dài.",
+                "chapters": [],
+                "actionItems": [],
+                "keywords": [],
+            }
+            yield result["summary"]
+            yield result
+            return
+        if window == "30s":
+            transcript = transcript[-1500:]
+        else:
+            transcript = transcript[-8000:]
+
+        url = f"{self.base_url}/chat/completions"
+        got_any = False
+        summary_acc = ""
+        if self.api_key and self.base_url:
+            try:
+                async with httpx.AsyncClient() as client:
+                    async with client.stream(
+                        "POST",
+                        url,
+                        headers={"Authorization": f"Bearer {self.api_key}"},
+                        json={
+                            "model": self.model,
+                            "messages": [
+                                {"role": "user", "content": PROMPT_SUMMARY_STREAM.format(transcript=transcript)}
+                            ],
+                            "temperature": 0.3,
+                            "stream": True,
+                        },
+                        timeout=20.0,
+                    ) as r:
+                        r.raise_for_status()
+                        async for line in r.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            data = line[5:].strip()
+                            if not data:
+                                continue
+                            if data == "[DONE]":
+                                break
+                            try:
+                                delta = json.loads(data)["choices"][0].get("delta", {}).get("content")
+                            except Exception:
+                                continue
+                            if not delta:
+                                continue
+                            # một số model vẫn bọc ``` fences dù prompt cấm — bỏ fence đầu/cuối
+                            if not got_any and delta.strip().startswith("```"):
+                                delta = delta.strip().strip("`").lstrip()
+                                if not delta:
+                                    continue
+                            got_any = True
+                            summary_acc += delta
+                            yield delta
+            except Exception as e:
+                print(f"[ai] custom summarize_stream error ({url} model={self.model}): {e}")
+
+        if got_any:
+            # metadata (chapters/actionItems/keywords) dùng heuristic sẵn có của _fallback;
+            # summary giữ nguyên text đã stream từ LLM.
+            meta = self._fallback(transcript)
+            summary_final = summary_acc.strip() or meta.get("summary", "")
+        else:
+            # không có key / backend lỗi -> fallback heuristic đầy đủ, stream chia nhỏ theo từ
+            meta = self._fallback(transcript)
+            summary_final = meta.get("summary", "")
+            for w in summary_final.split(" "):
+                yield w + " "
+
+        yield {
+            "summary": (summary_final or "").strip(),
+            "chapters": meta.get("chapters", []),
+            "actionItems": meta.get("actionItems", []),
+            "keywords": meta.get("keywords", []),
+        }
 
     async def _custom(self, transcript: str) -> dict:
         prompt = PROMPT_SUMMARY.format(transcript=transcript)

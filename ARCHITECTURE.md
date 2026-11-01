@@ -161,7 +161,7 @@ class SentenceBuffer {
   ```
   You are a live caption translator. Translate from ${sourceLang} to ${targetLang}, keep context, short and natural, no explanation.
   ```
-  Supports streaming (`TRANSLATE_STREAM=1`), better context preservation for rare languages.
+  Supports streaming (`TRANSLATE_STREAM=1`): real SSE streaming from the OpenAI-compatible backend (`stream: true`, deltas parsed in `LLMTranslator.translate_stream`); falls back to one-shot translate on error/empty stream.
 - **Seq mapping (fix for slow/out-of-order AI):** Server assigns monotonic `seq` for each sentence from `SentenceBuffer` (`Session._sentence_seq`), emits `translate:final {seq, source, text}` and `stt:final {seq}` for Web Speech. Client `useLiveCaption` stores `sentences[seq]=source` and `translations[lang][seq]=text` (sparse array), `CaptionOverlay` & history render by `seq` so translations stay aligned even with slow/out-of-order AI responses.
 
 **Phase 2 - Multi-language:**

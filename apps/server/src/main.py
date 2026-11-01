@@ -54,10 +54,25 @@ async def _broadcast(room_id: str, event: str, payload: dict):
         except Exception:
             pass
 
+# CORS: `ALLOWED_ORIGINS` (comma-separated, vd "https://a.com,https://b.com").
+# Set biến này ở production (sau reverse proxy) để chỉ cho phép các origin đó.
+# Không set → giữ `*` cho dev local (extension + web chạy trên origin bất kỳ),
+# nhưng log warning một lần nhắc nhở cấu hình trước khi ra production.
+def _allowed_origins() -> list[str]:
+    raw = os.environ.get("ALLOWED_ORIGINS", "").strip()
+    if not raw:
+        logger.warning(
+            "[cors] ALLOWED_ORIGINS chưa set — cho phép mọi origin (*). "
+            "Set ALLOWED_ORIGINS='https://app.example.com,...' trước khi chạy production."
+        )
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 app = FastAPI(title="Live Translate Server")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -60,4 +60,20 @@ describe("createLiveSocket", () => {
     expect(true).toBe(true);
     sock.close();
   });
+  it("join without roomId uses a random room, not the shared 'default'", async () => {
+    const { randomRoomId } = await import("../lib/socket");
+    const a = randomRoomId();
+    const b = randomRoomId();
+    expect(a).not.toBe("default");
+    expect(a).toMatch(/^[a-zA-Z0-9]{1,8}$/);
+    expect(b).not.toBe(a);
+    const sock = createLiveSocket({ url:"ws://localhost:8000", sourceLang:"en", targetLangs:["vi"] });
+    await vi.advanceTimersByTimeAsync(0);
+    const ws = (global as any).lastWS as MockWS;
+    const join = JSON.parse(ws.sent[0]);
+    expect(join.type).toBe("join");
+    expect(join.roomId).not.toBe("default");
+    expect(join.roomId).toMatch(/^[a-zA-Z0-9]{1,8}$/);
+    sock.close();
+  });
 });

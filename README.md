@@ -72,6 +72,7 @@ pnpm dev:web          # http://localhost:3000
 - `DEEPGRAM_API_KEY` (required if `STT_PROVIDER=deepgram` - get free trial at deepgram.com; use `webspeech` for free without a key)
 - `CUSTOM_API_KEY` + `CUSTOM_BASE_URL` + `CUSTOM_MODEL` (for AI translate/summary - OpenAI-compatible; falls back to `MyMemory FREE` if empty)
 - `TRANSLATE_PROVIDER=auto|ai|free` (auto = prefer CUSTOM if available, otherwise MyMemory)
+- `ALLOWED_ORIGINS` (optional, comma-separated list of origins allowed by the server's CORS policy, e.g. `https://app.example.com,https://admin.example.com`; unset = allow `*` for local dev — a warning is logged, set this before deploying to production)
 
 **How to Use (iframe-first, recommended):**
 - **Iframe-centered:** Open `http://localhost:3000` -> `🌐` input paste URL (youtube.com, vimeo, mp4, meet...) -> `Load` -> large iframe 58-62vh occupying 65% of screen, toolbar with `⛶ Fullscreen`, `↗ New tab`, history & suggestions. Iframe has `allow="microphone; camera; display-capture; autoplay; fullscreen; clipboard-*"`.

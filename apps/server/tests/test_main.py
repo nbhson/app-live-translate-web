@@ -31,6 +31,27 @@ def test_list_sessions():
     r = client.get("/api/sessions")
     assert r.status_code == 200
 
+
+def test_cors_wildcard_when_allowed_origins_unset(monkeypatch):
+    # Không set ALLOWED_ORIGINS → giữ hành vi `*` (dev), hàm log warning.
+    from src.main import _allowed_origins
+    monkeypatch.delenv("ALLOWED_ORIGINS", raising=False)
+    assert _allowed_origins() == ["*"]
+    r = client.options(
+        "/health",
+        headers={
+            "Origin": "https://evil.example",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert r.headers.get("access-control-allow-origin") == "*"
+
+
+def test_cors_allowed_origins_parsed(monkeypatch):
+    from src.main import _allowed_origins
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://a.com, https://b.com ,")
+    assert _allowed_origins() == ["https://a.com", "https://b.com"]
+
 def test_get_transcripts():
     r = client.get("/api/sessions/123/transcripts")
     assert r.status_code == 200

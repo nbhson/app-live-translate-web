@@ -13,6 +13,16 @@ export type SocketOpts = {
   roomId?: string;
 };
 
+/**
+ * Sinh room ID ngẫu nhiên (8 ký tự) thay vì dùng room chung "default" —
+ * room tên "default" là công khai: bất kỳ ai kết nối không có roomId đều
+ * vào cùng một room và nghe/nhận transcript của nhau.
+ */
+export function randomRoomId(): string {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return (uuid ?? Math.random().toString(36).slice(2)).replace(/[^a-zA-Z0-9]/g, "").slice(0, 8);
+}
+
 export function createLiveSocket(opts: SocketOpts) {
   const url = opts.url.endsWith("/ws") ? opts.url : `${opts.url.replace(/\/$/,"")}/ws`;
   let ws: WebSocket | null = null;
@@ -45,7 +55,7 @@ export function createLiveSocket(opts: SocketOpts) {
     ws.onopen = () => {
       reconnectAttempts = 0; // kết nối thành công — reset backoff
       trigger("open",{});
-      emit("join",{ sourceLang: opts.sourceLang, targetLangs: opts.targetLangs, sttProvider: opts.sttProvider ?? "deepgram", translateProvider: opts.translateProvider ?? "ai", roomId: opts.roomId ?? "default" });
+      emit("join",{ sourceLang: opts.sourceLang, targetLangs: opts.targetLangs, sttProvider: opts.sttProvider ?? "deepgram", translateProvider: opts.translateProvider ?? "ai", roomId: opts.roomId ?? randomRoomId() });
       if(hb) clearInterval(hb);
       hb=setInterval(()=> emit("ping",{}), 25000);
     };

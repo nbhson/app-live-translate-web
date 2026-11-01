@@ -13,6 +13,7 @@ import { UrlIframePlayer } from "../components/UrlIframePlayer";
 import { toSrt, toVtt, toTranscriptText, toMarkdown, downloadText } from "../lib/srt";
 import { loadSettings, saveSetting, saveActivePreset, loadActivePreset, LANG_PRESETS, applyTheme } from "../lib/settings";
 import { computeStats } from "../lib/stats";
+import { randomRoomId } from "../lib/socket";
 
 type Tab = "live" | "summary" | "stats" | "history";
 
@@ -67,7 +68,13 @@ export default function Home() {
     applyTheme(s.theme);
     try {
       const room = new URLSearchParams(window.location.search).get("room");
-      if (room) setRoomId(room.replace(/[^\w-]/g, "").slice(0, 64) || null);
+      if (room) {
+        setRoomId(room.replace(/[^\w-]/g, "").slice(0, 64) || null);
+      } else {
+        // Không có ?room= → sinh room ID ngẫu nhiên thay vì để client rơi vào
+        // room chung "default" (room công khai, ai cũng nhìn thấy transcript).
+        setRoomId(randomRoomId());
+      }
     } catch { /* no location (SSR) */ }
     setHydrated(true);
   }, []);
